@@ -1,0 +1,1 @@
+This is my first python module and currently I can not recommend the general public to use it. However I have used it intensivley in the past.
