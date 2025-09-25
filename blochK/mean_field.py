@@ -1,3 +1,9 @@
+#TODO: add tests for this module
+
+
+
+
+
 import numpy as np
 import scipy.optimize as optimize
 from hamiltonian_2orbital import psik8,E8_const,Spin_operator,Sublattice_operator,Orbital_operator

@@ -1,3 +1,6 @@
+#TODO: add tests for this module
+
+
 import numpy as np
 from numpy import pi,cos,sin,exp
 
@@ -22,6 +25,6 @@ def Berry_connection(Hamiltonian_fct,Hparam={},Lq=51):
 
 
 def Chern_number(Hamiltonian_fct,Hparam={},Lq=51):
-    """Determines the Chern number of each band, all bands must be gapped"""
+    """Determines the Chern number of each band, all bands must be gapped, i.e. no crossings"""
     A = Berry_connection(Hamiltonian_fct,Hparam=Hparam,Lq=Lq)
     return np.sum(A,axis=(1,2))/2/pi

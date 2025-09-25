@@ -5,50 +5,56 @@ import copy
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-from blochK.methods_basic import path
-from blochK.observable import exp_value_O, isDegenerateIn, eigs_H
+from blochK.plotting.utils import path,sample_square
+from blochK.observable import exp_value_O, isDegenerateIn
 
 #for coloring lines
 from matplotlib.collections import LineCollection
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
 
-def plot_FS(ax,Hamiltonian_fct,param={}, Lq=200, coloring_operator='k',show_title=True,show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False):
-    """Plots colored FS of psik8(param) on ax,
-
-    coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues)
-
+def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False):
     """
+    Plots Fermi surface of Hamiltonian on ax
+    Parameters:
+    ax: matplotlib axis
+    Hamiltonian: Hamiltonian2D object
+    Lk: number of k points along each direction
+    coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues), i..e. ndarraty of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
+    """
+    #check coloring operator
+    if isinstance(coloring_operator,str):
+        assert isinstance(coloring_operator,str), 'coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian'
+    elif isinstance(coloring_operator,np.ndarray):
+        assert coloring_operator.shape == (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or coloring_operator.shape == (Hamiltonian.n_orbitals,), 'coloring operator must be an operator (ndarray) with shape matching the Hamiltonian'
+    else:
+        raise ValueError('coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian')
+    
     #setting a nice colormap
     if cmap=='none':
-        cmap = copy.copy(matplotlib.cm.get_cmap("brg")) #set the name of the colormap
+        cmap = copy.copy(matplotlib.colormaps["brg"]) #set the name of the colormap
     else:
-        cmap = copy.copy(matplotlib.cm.get_cmap(cmap)) #set the name of the colormap
+        cmap = copy.copy(matplotlib.colormaps[cmap]) #set the name of the colormap
     cmap.set_under(color='black')
     cmap.set_over(color='gray')
     norm = plt.Normalize(0, 1) # Create a continuous norm to map from data points to colors
 
-    kxs = np.linspace(-pi,pi,Lq)
-    kys = np.linspace(-pi,pi,Lq)
-    xs,ys = np.meshgrid(kxs,kys)
-    ks = np.moveaxis([xs,ys],0,-1)
+    ks = sample_square(Lk)
+    xs = ks[0]; ys = ks[1]
 
-    es,psis = eigs_H(xs,ys,Hamiltonian_fct,param)
-
+    es,_ = Hamiltonian.diagonalize(xs,ys)
     
-#     if show_title:
-#         ax.set_title('V={:4.2f},  J={:4.2f},\ndn={:4.2f}, dm={:4.2f}'.format(param['V'],param['J'],param['dn'],param['dm']),fontsize=6)
     ax.set_aspect('equal')
     if show_xlabel:
-        ax.set_xlabel('$k_x$',labelpad=1)
+        ax.set_xlabel(r'$k_x$',labelpad=1)
         ax.set_xticks([-pi,0,pi])
-        ax.set_xticklabels(['$-\pi$',0,'$\pi$'])
+        ax.set_xticklabels([r'$-\pi$',0,r'$\pi$'])
     else:
         ax.set_xticklabels([])
     if show_ylabel:
-        ax.set_ylabel('$k_y$',labelpad=-2.5)
+        ax.set_ylabel(r'$k_y$',labelpad=-2.5)
         ax.set_yticks([-pi,0,pi])
-        ax.set_yticklabels(['$-\pi$',0,'$\pi$'])
+        ax.set_yticklabels([r'$-\pi$',0,r'$\pi$'])
     else:
         ax.set_yticklabels([])
     
@@ -67,7 +73,7 @@ def plot_FS(ax,Hamiltonian_fct,param={}, Lq=200, coloring_operator='k',show_titl
                     if datapoints.shape[0]>2:
                         points = datapoints.reshape(-1, 1, 2)
                         segments = np.concatenate([points[:-1], points[1:]], axis=1) #create a list of N-1 lines form v0 to v1, from v1 to v2,...
-                        es_FS,psis_FS = eigs_H(datapoints[:,0],datapoints[:,1],Hamiltonian_fct,param) #determine es, psis along contour
+                        es_FS,psis_FS = Hamiltonian.diagonalize(datapoints[:,0],datapoints[:,1]) #determine es, psis along contour
                         Os = exp_value_O(coloring_operator,psis_FS)
                         isDeg = isDegenerateIn(es_FS,Os,threshold=3)
                         lc = LineCollection(segments,cmap=cmap,norm=norm, capstyle='projecting')
@@ -78,33 +84,44 @@ def plot_FS(ax,Hamiltonian_fct,param={}, Lq=200, coloring_operator='k',show_titl
                         line = ax.add_collection(lc)
     #----------------
     if print_filling:
-        print(np.sum(es<0)/np.prod(es.shape)) #filling
+        print('filling is: ', np.sum(es<0)/np.prod(es.shape)) #filling
 
                     
 
-def plot_bandstruc(ax,Hamiltonian_fct,param={},points_path=[[0,0],[pi,0],[0,pi],[0,0]], labels_points_path=['$[0,0]$','$[pi,0]$','$[0,pi]$','$[0,0]$'],N_samples=100, coloring_operator='k',show_title=True,show_xlabel=True,show_ylabel=True,cmap='none'):
-    """Plots colored bandstructure along points_path of psik8(param) on ax,
-    
-    coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues)
+def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma','X','R','Y',r'\Gamma'],N_samples=100, coloring_operator='k',show_xlabel=True,show_ylabel=True,cmap='none'):
     """
+    Plots Fermi surface of Hamiltonian on ax
+    Parameters:
+    ax: matplotlib axis
+    Hamiltonian: Hamiltonian2D object
+    N_samples: number of k points between each point in points_path
+    points_path: list of k-points defining the path in the BZ, default None, in which case it is taken from labels_points_path
+    labels_points_path: list of labels for the k-points defining the path in the BZ
+    coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues), i..e. ndarray of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
+    """
+
+    #if no path is given, get it from the labels, assuming they are in the BZ points
+    if points_path is None: 
+        if not all([p in Hamiltonian.BZ.points.keys() for p in labels_points_path]):
+            raise ValueError('all labels in labels_points_path must be in Hamiltonian.BZ.points')
+        points_path = [Hamiltonian.BZ.points[p] for p in labels_points_path]
+        labels_points_path=[r'${}$'.format(l) for l in labels_points_path] #transform to latex format
+
     #setting the path
     ts, ks, ticks = path(points_path,N_samples=N_samples)
-    
+
     #setting a nice colormap
     if cmap=='none':
-        cmap = copy.copy(matplotlib.cm.get_cmap("brg")) #set the name of the colormap
+        cmap = copy.copy(matplotlib.colormaps["brg"]) #set the name of the colormap
     else:
-        cmap = copy.copy(matplotlib.cm.get_cmap(cmap)) #set the name of the colormap
+        cmap = copy.copy(matplotlib.colormaps[cmap]) #set the name of the colormap
     cmap.set_under(color='black')
     cmap.set_over(color='gray')
     norm = plt.Normalize(0, 1) # Create a continuous norm to map from data points to colors
     
-    es,psis = eigs_H(ks[:,0],ks[:,1],Hamiltonian_fct,param)
-    
-    
-    #print(param['dm'],param['dn'])
+    es,psis = Hamiltonian.diagonalize(ks[:,0],ks[:,1])
+
     ax.axhline(0,linestyle='--',color='k',zorder=0)
-    
 
     if isinstance(coloring_operator,str): #if coloring operator is a color
         for iband in range(len(es)):
@@ -127,10 +144,8 @@ def plot_bandstruc(ax,Hamiltonian_fct,param={},points_path=[[0,0],[pi,0],[0,pi],
     ax.set_xlim(ts[0],ts[-1])
     ax.set_xticks(ticks)
     
-#     if show_title:
-#         ax.set_title('dn={0}, dm={1}, (V,J) = ({2},{3})'.format(np.round(param['dn'],4),np.round(param['dm'],4),np.round(param['V'],2),np.round(param['J'],2)))
     if show_ylabel:
-        ax.set_ylabel('$E/t$',labelpad=-4.5)
+        ax.set_ylabel(r'$E/t$',labelpad=-4.5)
     else:
         ax.set_yticklabels([])
     if show_xlabel:

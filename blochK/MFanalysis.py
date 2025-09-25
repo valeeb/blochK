@@ -1,3 +1,10 @@
+#TODO: add tests for this module
+
+
+
+
+
+
 import numpy as np
 from numpy import pi,cos,sin,exp
 import matplotlib.pylab as plt

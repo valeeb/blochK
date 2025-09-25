@@ -3,33 +3,10 @@
 import numpy as np
 from numpy import pi,cos,sin,exp
 
-#operators
-Spin_operator = np.array([1,-1]) #spin up +1, spin down -1
-
-#Definitions for the Square lattice
-#lattice vectors
-n1 = np.array([1,0])
-n2 = np.array([0,1])
-
-# Area of unit cell (2D cross product)
-A = n1[0]*n2[1] - n1[1]*n2[0]
-#reciprocal lattice vectors
-m1 = 2*np.pi/A * np.array([n2[1], -n2[0]])
-m2 = 2*np.pi/A * np.array([-n1[1], n1[0]])
-
-# Define High symmetry points in BZ
-points_BZ = {
-    "\Gamma": [0,0],
-    "X": [1,0],
-    "Y": [0,1],
-    "R": [1,1],
-    "R'": [1,-1],
-    "-R": [-1,1],
-    "-R'": [-1,-1]
-}
+from blochK.hamiltonian import Hamiltonian2D
 
 
-def Hamiltonian0(kx,ky,t=1,mu=-1): 
+def Hamiltonian_func0(kx,ky,t=1,mu=-1): 
     """
     t: NN hopping 
     """
@@ -45,4 +22,37 @@ def Hamiltonian0(kx,ky,t=1,mu=-1):
     Hk[1:,1:] = Hk[:1,:1]
 
     return Hk
+
+def Hsquare_fct(kx,ky,t=1,mu=-1,m=0): 
+    """
+    t: NN hopping 
+    mu: chemical potential
+    m: FM
+    """
+    Hk = np.zeros((2,2,*kx.shape),dtype=complex) #Basis (up,down)
+
+    #set hamiltonian structure
+    Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) - mu
+
+    #make hermitian
+    Hk[1,0] = np.conjugate(Hk[0,1])
+
+    #spin degenerate
+    Hk[1:,1:] = Hk[:1,:1]
+
+    #add magnetization in z direction
+    Hk[0,0] -= m
+    Hk[1,1] += m
+
+    return Hk
+
+
+def create_Hsquare():
+    """Create Hsquare function with default parameters"""
+    n1 = np.array([1,0])
+    n2 = np.array([0,1])
+    Hsquare = Hamiltonian2D(Hsquare_fct, basis_states=['up','down'], basis=['spin'], n1=n1, n2=n2)
+    Hsquare.add_operator('spin', np.array([1,-1])) #diagnonal part of sz
+
+    return Hsquare
 

@@ -7,23 +7,6 @@ from numpy import pi,cos,sin,exp
 #############################################################################################################################################
 
 
-#solve a hamiltonian
-def eigs_H(kx,ky,Hamiltonian_fct,Hparam): 
-    """
-    Return energies 'es' and wavefunctions 'psis' in the shape:
-    es.shape = band x kys (x kxs)
-    psi.shape = band x kys (x kxs) x localH
-    """
-    Hk = Hamiltonian_fct(kx,ky,**Hparam)
-    
-    Hk = np.moveaxis(np.moveaxis(Hk,1,-1),0,-2) #make it ...x band x band dimensional
-    es,vs = np.linalg.eigh(Hk)
-    es = np.moveaxis(es,-1,0) #.shape=band x kys (x kxs)
-    psi = np.moveaxis(vs,-1,0) #.shape=band x kys (x kxs) x localH
-    
-    return es, psi
-
-
 #expectation value of operators
 def exp_value_O(O,psi):
     """evalute the expectation value of an Operator O for a set of states psi (band x kys (x kxs) x localH)
@@ -49,6 +32,7 @@ def exp_value_Odiag(O,psi):
 
 #############################################################################################################################################
 #degeneracy of eigenstates
+#############################################################################################################################################s
 
 def isDegenerate_1D(es):
     """Checks if an energie in es (.shape=band)"""
@@ -105,9 +89,7 @@ def isDegenerateIn(es,observable_values,threshold=10):
 #both methods give same results,in 'conductivity' the operator is directly evaluated, and 'conductivity_orbital_resolved' return a tensor where one leg can be used to contract with an diagonal operator
 #in principle one can write a third function to evalute the conductivity with a non-diagonal operator
 
-from blochK.methods_basic import sample_BZ
-
-def conductivity(Hamiltonian_fct,Hparam=dict(),Gamma=1e-2,energy=0,operator=None,kmesh_BZ=None,basis='xy',optimize='path'):
+def conductivity(Hamiltonian,Gamma=1e-2,energy=0,operator=None,kmesh_BZ=None,optimize='path'):
     """
     Evalutes the conductivity with respect to an operator of Hamiltonian_fct with 'Hparam'. 
     Parameters:
@@ -123,15 +105,15 @@ def conductivity(Hamiltonian_fct,Hparam=dict(),Gamma=1e-2,energy=0,operator=None
     #sampling the BZ
     if kmesh_BZ is None:
         Lq = 100
-        kmesh_BZ = sample_BZ(Lq)
+        kmesh_BZ = Hamiltonian.BZ.sample(Lq)
     else:
         Lq = kmesh_BZ.shape[1]
     ks = kmesh_BZ #ks.shape=(2,k,q)
 
     #compute the hamiltonian, eigenvalues and eigenstates
-    Hk = Hamiltonian_fct(*ks,**Hparam) #.shape = (localH,localH,k,q)
-    es,psi = eigs_H(*ks,Hamiltonian_fct,Hparam) #.shape=(band,k,q,localH)
-    
+    Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
+    es,psi = Hamiltonian.diagonalize(*ks) #.shape=(band,k,q,localH)
+
     #compute the derivatives of Hk along unit vectors of BZ
     dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
     v1 = -(np.roll(Hk,1,axis=2)-np.roll(Hk,-1,axis=2))/dk/2 #along first axis
@@ -167,7 +149,7 @@ def conductivity(Hamiltonian_fct,Hparam=dict(),Gamma=1e-2,energy=0,operator=None
     return np.real(sigma)/Lq**2 /np.pi
 
 
-def conductivity_orbital_resolved(Hamiltonian_fct,Hparam=dict(),Gamma=1e-2,energy=0,kmesh_BZ=None,optimize='path'):
+def conductivity_orbital_resolved(Hamiltonian,Gamma=1e-2,energy=0,kmesh_BZ=None,optimize='path'):
     """
     Evalutes the conductivity of Hamiltonian_fct with 'Hparam' in the diagonal bloch basis,
     i.e. the current operator j_iab(k) = O_a * v_ab(k) is not contracted over a (localH index). Only valid for O diagonal. This is much faster than calling conductivity several times.
@@ -185,14 +167,14 @@ def conductivity_orbital_resolved(Hamiltonian_fct,Hparam=dict(),Gamma=1e-2,energ
     #sampling the BZ
     if kmesh_BZ is None:
         Lq = 100
-        kmesh_BZ = sample_BZ(Lq)
+        kmesh_BZ = Hamiltonian.BZ.sample(Lq)
     else:
         Lq = kmesh_BZ.shape[1]
     ks = kmesh_BZ #ks.shape=(2,k,q)
 
     #compute the hamiltonian, eigenvalues and eigenstates
-    Hk = Hamiltonian_fct(*ks,**Hparam) #.shape = (localH,localH,k,q)
-    es,psi = eigs_H(*ks,Hamiltonian_fct,Hparam) #.shape=(band,k,q,localH)
+    Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
+    es,psi = Hamiltonian.diagonalize(*ks) #.shape=(band,k,q,localH)
     
     #compute the derivatives of Hk along unit vectors of BZ
     dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
