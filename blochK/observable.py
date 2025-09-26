@@ -1,5 +1,6 @@
 import numpy as np
 from numpy import pi,cos,sin,exp
+from blochK.hamiltonian import Hamiltonian2D
 
 
 #############################################################################################################################################
@@ -89,7 +90,7 @@ def isDegenerateIn(es,observable_values,threshold=10):
 #both methods give same results,in 'conductivity' the operator is directly evaluated, and 'conductivity_orbital_resolved' return a tensor where one leg can be used to contract with an diagonal operator
 #in principle one can write a third function to evalute the conductivity with a non-diagonal operator
 
-def conductivity(Hamiltonian,Gamma=1e-2,energy=0,operator=None,kmesh_BZ=None,optimize='path'):
+def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,kmesh_BZ=None,optimize='path'):
     """
     Evalutes the conductivity with respect to an operator of Hamiltonian_fct with 'Hparam'. 
     Parameters:
@@ -113,6 +114,10 @@ def conductivity(Hamiltonian,Gamma=1e-2,energy=0,operator=None,kmesh_BZ=None,opt
     #compute the hamiltonian, eigenvalues and eigenstates
     Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
     es,psi = Hamiltonian.diagonalize(*ks) #.shape=(band,k,q,localH)
+
+    #define broadening if not given
+    if Gamma is None:
+        Gamma = find_Gamma(es)
 
     #compute the derivatives of Hk along unit vectors of BZ
     dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
@@ -149,7 +154,7 @@ def conductivity(Hamiltonian,Gamma=1e-2,energy=0,operator=None,kmesh_BZ=None,opt
     return np.real(sigma)/Lq**2 /np.pi
 
 
-def conductivity_orbital_resolved(Hamiltonian,Gamma=1e-2,energy=0,kmesh_BZ=None,optimize='path'):
+def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,kmesh_BZ=None,optimize='path'):
     """
     Evalutes the conductivity of Hamiltonian_fct with 'Hparam' in the diagonal bloch basis,
     i.e. the current operator j_iab(k) = O_a * v_ab(k) is not contracted over a (localH index). Only valid for O diagonal. This is much faster than calling conductivity several times.
@@ -175,6 +180,10 @@ def conductivity_orbital_resolved(Hamiltonian,Gamma=1e-2,energy=0,kmesh_BZ=None,
     #compute the hamiltonian, eigenvalues and eigenstates
     Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
     es,psi = Hamiltonian.diagonalize(*ks) #.shape=(band,k,q,localH)
+
+    #define broadening if not given
+    if Gamma is None:
+        Gamma = find_Gamma(es)
     
     #compute the derivatives of Hk along unit vectors of BZ
     dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
@@ -200,3 +209,96 @@ def conductivity_orbital_resolved(Hamiltonian,Gamma=1e-2,energy=0,kmesh_BZ=None,
     
     
     return np.real(sigma)/Lq**2 /np.pi
+
+
+#############################################################################################################################################
+#Computing Quasiparticle Interference (QPI) / Local Density of States (LDOS)
+#############################################################################################################################################
+#rho(q) = -1/pi Im Tr[ G(k+q) G(k) T], where T = (1 - V0 G_local)^(-1) V0
+#
+#for V(r) = delta(r) V0, i.e. a local impurity potential, V0 is a matrix of shape (n_orbitals,n_orbitals)
+#and G_local = sum_k G(k) appears because of V(r) = delta(r) V0 -> V(q) = V0
+#where G(k) = 1/(E-H(k)+i Gamma) is the Green's function
+#V0 = operator in the code below
+
+from blochK.utils.cross_correlation import cross_correlation
+
+
+def local_dos_QPI(Hamiltonian: Hamiltonian2D, Gamma=None,operator=0,Lk=50,kmesh=None,return_symmetric_array=False):
+    """
+    Computes the local density of states rho(q) in momentum space using T-matrix formalism, i.e.,
+    rho(q) = -1/pi * Im Tr[ G(k+q) G(k) T] where T = (1 - V G_local)^(-1) V
+    where G(k) = 1/(E-H(k)+i Gamma) is the Green's function, and assumes V(r) = delta(r) V therefore, G_local = sum_k G(k)
+    -----------
+    Parameters:
+    Hamiltonian: Hamiltonian2D object
+    Gamma: float
+        Broadening of the Green's function. If None it is determined using find_Gamma
+    operator: ndarray or float
+        operator V0 with shape must be (localH,localH) or a float 
+    Lk: int
+        Number of k-points in each direction
+    kmesh: ndarray
+        k-points of the Brillouin zone, shape=(2,Lk,Lk). If None, BZ is sampled
+    return_symmetric_array: bool
+        If True and Lk even, returns a (Lk+1,Lk+1) array that is symmetric and can be plotted with imshow such that the plot is symmetric
+    -----------
+    Returns:
+    ldos: ndarray
+        Local density of states rho(q) in momentum space. Shape is (Lk,Lk) if return_symmetric_array=False, else (Lk+1,Lk+1)
+    """
+    if kmesh is None:
+        kmesh = Hamiltonian.BZ.sample(Lk)
+    if isinstance(operator,float) or isinstance(operator,int) :
+        operator = operator*np.eye(Hamiltonian.n_orbitals)
+
+    es,psi = Hamiltonian.diagonalize(*kmesh) #psi.shape = band x kys (x kxs) x localH
+    dimH = Hamiltonian.n_orbitals #dimension of local Hamiltonian
+
+    assert operator.shape == (dimH,dimH), "operator must be of shape (Hamiltonian2D.n_orbitals,Hamiltonian2D.n_orbitals)"
+
+    #define broadening if not given
+    if Gamma is None:
+        Gamma = find_Gamma(es)
+
+    #define Green's function tensor, ky momentum, kx momentum, orbital a, orbital b
+    opt_path = ['einsum_path', (0, 2), (0, 1)]
+    Greensfct_yxab = np.einsum('nyxa,nyxb,nyx->yxab',psi,np.conj(psi),1/(es+1j*Gamma),optimize=opt_path)
+
+    #compute transfer matrix T
+    Greensfct_local_ab = np.sum(Greensfct_yxab,axis=(0,1))/Lk**2
+    T = np.linalg.inv(np.eye(dimH) - np.dot(operator,Greensfct_local_ab)).dot(operator) #T.shape=(localH,localH)
+
+    #compute z_ac(q) = G_ab(k+q)*G_bc(k) using FFT
+    z = cross_correlation(Greensfct_yxab) #z.shape=(qy,qx,a,b)
+
+    #computes local density of states
+    ldos = -1/np.pi * np.imag(np.einsum('yxab,ba->yx',z,T)) #+ makes the ldos positive if everything is converged
+
+    ldos = ldos/2 #we computed things for the full BZ, so we double counted, this Hamiltonian_fct dependend
+    ldos = np.fft.fftshift(ldos) #shift zero frequency to the center
+
+    #add such that the plot is symmetric
+    if return_symmetric_array and Lk%2==0:
+        ldos = np.append(ldos, [ldos[0]], axis=0) #append first row at the end
+        ldos = np.append(ldos, ldos[:,:1], axis=1) #append first column at the end
+
+    #things to check:
+    #for converged results, ldos should be positive everywhere
+    #for FS Gamma centered, FS should match with peak of imshow with extent=(-pi,pi,-pi,pi)/2 
+
+    return ldos
+
+
+
+#############################################################################################################################################
+#helper functions
+#############################################################################################################################################
+
+def find_Gamma(es, weighting_factor=0.8):
+    """Defines a suitable broadening Gamma based on the maximum variation of the band structure es."""
+    des_x = np.roll(es, 1, axis=2) - es
+    des_y = np.roll(es, 1, axis=1) - es
+    des = np.abs([des_x, des_y]).flatten()
+    des0 = des.max()
+    return des0 * weighting_factor

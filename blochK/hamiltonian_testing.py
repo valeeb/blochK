@@ -53,6 +53,7 @@ def create_Hsquare():
     n2 = np.array([0,1])
     Hsquare = Hamiltonian2D(Hsquare_fct, basis_states=['up','down'], basis=['spin'], n1=n1, n2=n2)
     Hsquare.add_operator('spin', np.array([1,-1])) #diagnonal part of sz
+    Hsquare.add_operator('spinx', np.array([[0,1],[1,0]])) #spin x operator
 
     return Hsquare
 

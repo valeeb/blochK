@@ -76,3 +76,34 @@ def test_conductivity_and_conductivity_orbital_resolved():
     sigma2 = np.sum(sigma_or*projector[:,np.newaxis,np.newaxis], axis=0)
 
     assert np.isclose(sigma1, sigma2).all()
+
+
+#############################################################################################################################################
+#QPIs
+#############################################################################################################################################
+def test_conductivity():
+    param = dict(t=1,m=0.4)
+    H = create_Hsquare()
+    H.set_params(param)
+
+    ldos = observable.local_dos_QPI(H,Gamma=0.2,Lk=5)
+    assert ldos.shape == (5, 5)
+
+    ldos = observable.local_dos_QPI(H,Gamma=0.2,Lk=5,operator=0.2*H.operator.spinx)
+    assert ldos.shape == (5, 5)
+
+
+#############################################################################################################################################
+#helper functions
+#############################################################################################################################################
+
+def test_find_Gamma():
+    H = create_Hsquare()
+    H.set_params(dict(t=1,mu=-1,m=0.3))
+
+    Lk = 10
+    ks = H.BZ.sample(Lk)
+    es,_ = H.diagonalize(*ks)
+
+    Gamma = observable.find_Gamma(es)
+    print('Using Gamma = ',Gamma)   

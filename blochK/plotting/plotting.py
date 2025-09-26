@@ -153,7 +153,5 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma
     else:
         ax.set_xticklabels([])
 
-        
-        
 
     
