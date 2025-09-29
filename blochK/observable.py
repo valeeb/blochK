@@ -90,7 +90,7 @@ def isDegenerateIn(es,observable_values,threshold=10):
 #both methods give same results,in 'conductivity' the operator is directly evaluated, and 'conductivity_orbital_resolved' return a tensor where one leg can be used to contract with an diagonal operator
 #in principle one can write a third function to evalute the conductivity with a non-diagonal operator
 
-def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,kmesh_BZ=None,optimize='path'):
+def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,Lk=50,optimize='path'):
     """
     Evalutes the conductivity with respect to an operator of Hamiltonian_fct with 'Hparam'. 
     Parameters:
@@ -104,12 +104,7 @@ def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,km
     'optimize': optimization strategy for the computation, see numpy.einsum documentation, for a new problem use 'find_path' first, store it in function and use 'path'
     """
     #sampling the BZ
-    if kmesh_BZ is None:
-        Lq = 100
-        kmesh_BZ = Hamiltonian.BZ.sample(Lq)
-    else:
-        Lq = kmesh_BZ.shape[1]
-    ks = kmesh_BZ #ks.shape=(2,k,q)
+    ks = Hamiltonian.BZ.sample(Lk)
 
     #compute the hamiltonian, eigenvalues and eigenstates
     Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
@@ -151,10 +146,10 @@ def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,km
         sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
     
     
-    return np.real(sigma)/Lq**2 /np.pi
+    return np.real(sigma)/Lk**2 /np.pi
 
 
-def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,kmesh_BZ=None,optimize='path'):
+def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,Lk=50,optimize='path'):
     """
     Evalutes the conductivity of Hamiltonian_fct with 'Hparam' in the diagonal bloch basis,
     i.e. the current operator j_iab(k) = O_a * v_ab(k) is not contracted over a (localH index). Only valid for O diagonal. This is much faster than calling conductivity several times.
@@ -170,12 +165,7 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
     conductivity tensor .shape=(localH,2,2) (basis of H, n1 direction, n2 direction)
     """
     #sampling the BZ
-    if kmesh_BZ is None:
-        Lq = 100
-        kmesh_BZ = Hamiltonian.BZ.sample(Lq)
-    else:
-        Lq = kmesh_BZ.shape[1]
-    ks = kmesh_BZ #ks.shape=(2,k,q)
+    ks = Hamiltonian.BZ.sample(Lk)
 
     #compute the hamiltonian, eigenvalues and eigenstates
     Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
@@ -208,7 +198,7 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
         sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
     
     
-    return np.real(sigma)/Lq**2 /np.pi
+    return np.real(sigma)/Lk**2 /np.pi
 
 
 #############################################################################################################################################
@@ -289,6 +279,65 @@ def local_dos_QPI(Hamiltonian: Hamiltonian2D, Gamma=None,operator=0,Lk=50,kmesh=
 
     return ldos
 
+#############################################################################################################################################
+#Computing Magnetic Linear Dichroism
+#############################################################################################################################################
+# MLD(w) = I_x(w) - I_y(w)
+# I_a(w) = sum_{n,m,k} |M_a|^2 delta(E_m-E_n - w) n_FD(E_n) (1-n_FD(E_m))
+# where M_a = |<m|v_a|n>| and v_a = dH/dk_a
+
+def magnetic_linear_dichroism(Hamiltonian:Hamiltonian2D, omegas:np.ndarray, Lk=100, fact_eps=1):
+    """
+    Compute the magnetic linear dichroism spectrum of a 2D Hamiltonian.
+    Parameters:
+    Hamiltonian: Hamiltonian2D
+        The Hamiltonian for which to compute the spectrum.
+    omegas: np.ndarray
+        Array of frequency values at which to compute the spectrum.
+    Lk: int
+        Number of k-points along each axis in the Brillouin zone sampling.
+    fact_eps: float
+        Determines broadening of delta function, see below.
+    Returns:
+    intensity: np.ndarray.shape=(2,len(omegas))
+        Magnetic linear dichroism intensity in m1 and m2 direction, as a function of frequency.
+    """
+
+    #sampling the BZ
+    ks = Hamiltonian.BZ.sample(Lk)
+
+    #compute the hamiltonian, eigenvalues and eigenstates
+    Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
+    es,psi = Hamiltonian.diagonalize(*ks) #.shape=(band,k,q,localH)
+
+    #compute the derivatives of Hk along unit vectors of BZ
+    dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
+    v1 = -(np.roll(Hk,1,axis=2)-np.roll(Hk,-1,axis=2))/dk/2 #along first axis
+    v2 = -(np.roll(Hk,1,axis=3)-np.roll(Hk,-1,axis=3))/dk/2 #along second axis
+    v = np.array([v1,v2]) #.shape = (2,localH,localH,k,q)
+
+    #compute the matrix elements between bands
+    M_amnkq = np.einsum('mkqi,aijkq,nkqj->amnkq',np.conjugate(psi),v,psi) #.shape = (2,band,band,k,q)
+
+    #occupied states
+    fermi_occupation = es<0 #.shape = (band,k,q)
+
+    #delta function
+    #delta(E_m-E_n-omega) 
+    #using Lorentzian representation
+    #delta(x-w) = eps/(x^2 + eps^2)/pi
+    #eps = omega_spacing * fact_eps
+    eps = fact_eps*(omegas[1]-omegas[0]) #broadening for delta function
+    de_mnkqw = np.expand_dims(np.expand_dims(es,1)-np.expand_dims(es,0),-1) - omegas #de = E_m-E_n-omega; de.shape = (m,n,k,q,omegas)
+    delta_mnkqw = eps/(de_mnkqw**2 + eps**2)/np.pi #.shape = (m,n,k,q,omegas)
+
+    #sum: bands n,m, momentum k,q
+    intensity_aw = np.einsum('amnkq,mnkqw,nkq,mkq->aw',np.abs(M_amnkq)**2,delta_mnkqw,fermi_occupation,1-fermi_occupation)/Lk**2
+
+    #difference of x and y absorption
+    MLD_intensity = intensity_aw[0]-intensity_aw[1]
+
+    return MLD_intensity
 
 
 #############################################################################################################################################

@@ -3,14 +3,12 @@ from numpy import pi,cos,sin,exp
 import matplotlib
 import copy
 import matplotlib.pyplot as plt
-from matplotlib import cm
 
 from blochK.plotting.utils import path,sample_square
 from blochK.observable import exp_value_O, isDegenerateIn
 
 #for coloring lines
 from matplotlib.collections import LineCollection
-from matplotlib.colors import ListedColormap, BoundaryNorm
 
 
 def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False):

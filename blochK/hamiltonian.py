@@ -5,7 +5,7 @@ import scipy
 
 
 class Hamiltonian2D:
-    def __init__(self, Hamiltonian_func, n1=np.array([1,0]),n2=np.array([0,1]), basis=None, basis_states=None):
+    def __init__(self, Hamiltonian_func, n1=np.array([1,0]),n2=np.array([0,1]), basis=None, basis_states=None,param={}):
 
         assert callable(Hamiltonian_func), "Hamiltonian_func must be a callable function"
         Hk = Hamiltonian_func(np.array([0]),np.array([0]))
@@ -13,10 +13,10 @@ class Hamiltonian2D:
         assert Hk.ndim == 3, "Hamiltonian_func must return a 3D array"
         assert Hk.shape[0] == Hk.shape[1], "Hamiltonian_func must return a square matrix for each k-point"
         assert Hk.shape[2] == 1, "Hamiltonian_func must return a 3D array with last dimensions equal to kx.shape"
-
+        
         self.Hamiltonian_func = Hamiltonian_func  # the function defining H
-        self.n_orbitals = Hamiltonian_func(np.array([0]),np.array([0])).shape[0]  # number of orbitals (size of H)
-        self.param = dict()  # parameters of Hamiltonian_func (e.g., hopping strengths)
+        self.n_orbitals = Hamiltonian_func(np.array([0]),np.array([0]),**param).shape[0]  # number of orbitals (size of H)
+        self.param = param  # parameters of Hamiltonian_func (e.g., hopping strengths)
         self.n1 = n1  # lattice vector 1
         self.n2 = n2  # lattice vector 2
 
@@ -30,9 +30,15 @@ class Hamiltonian2D:
         self.basis = None  # basis [spin, sublattice, orbital, ...]
         self.basis_states = None  # names of basis states ['up','down',...
         self.operator = SimpleNamespace()  # operators acting on basis states (e.g., spin and sublattice Pauli matrices)
+        self.suboperator = SimpleNamespace()  # operators acting on part of basis states
 
 
     def set_params(self, kwargs):
+        """set parameters of Hamiltonian_func"""
+        self.param = kwargs
+
+
+    def update_params(self, kwargs):
         """set parameters of Hamiltonian_func"""
         self.param.update(kwargs)
 
@@ -48,6 +54,17 @@ class Hamiltonian2D:
         if operator.shape != (self.n_orbitals, self.n_orbitals) and operator.shape != (self.n_orbitals,):
             raise ValueError(f"Operator must be of shape ({self.n_orbitals}, {self.n_orbitals}) or ({self.n_orbitals},)")
         self.operator.__setattr__(name, operator)
+
+
+    def add_suboperator(self, name: str, operator: np.ndarray):
+        """Add operator acting on part of basis states
+        Parameters:
+        name: str
+            Name of the operator (e.g., 'spin', 'sublattice')
+        operator: np.ndarray
+            Operator matrix of shape (<n_orbitals, <n_orbitals) or (<n_orbitals,)
+        """
+        self.suboperator.__setattr__(name, operator)
 
 
     def evaluate(self, kx, ky, override_params={}):

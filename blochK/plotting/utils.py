@@ -29,17 +29,17 @@ def path(points,N_samples=100):
     return pathx, pathk, np.array(pathxPoints)
 
 
-def sample_square(Lq):
+def sample_square(Lk):
     """Samples the square with edges (-pi,-pi),(-pi,pi),(pi,pi),(pi,-pi) for plotting 2D functions. Note that this is sampling the edge twice.
     Use only for plotting."""
-    ks = np.meshgrid(np.linspace(-pi,pi,Lq),np.linspace(-pi,pi,Lq),indexing='ij')
+    ks = np.meshgrid(np.linspace(-pi,pi,Lk),np.linspace(-pi,pi,Lk),indexing='ij')
     return np.array(ks)
 
 
-def sample_reduced_square(Lq):
+def sample_reduced_square(Lk):
     """Samples the square with edges (0,pi),(pi,0),(0,-pi),(-pi,0) for plotting 2D functions. Note that this is sampling the edge twice.
     Use only for plotting."""
-    ks = np.meshgrid(np.linspace(0,pi,Lq),np.linspace(0,pi,Lq),indexing='ij')
+    ks = np.meshgrid(np.linspace(0,pi,Lk),np.linspace(0,pi,Lk),indexing='ij')
     rotation_matrix = np.array([[1,1],[1,-1]])/2
     ks = np.einsum('ij,jkl->ikl',rotation_matrix,ks)
     return ks
