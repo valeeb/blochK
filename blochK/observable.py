@@ -28,7 +28,9 @@ def exp_value_O(O,psi):
 
 def exp_value_Odiag(O,psi):
     """evalute the expectation value of an Operator O (.shape=(n)) for a set of states psi (band x kys (x kxs) x localH)"""
-    return np.sum((np.abs(psi)**2*O),axis=-1)
+    res = np.sum((np.abs(psi)**2*O),axis=-1)
+    assert np.all(np.isreal(res)), "Expectation value of a Hermitian operator must be real. Likely your operator is not Hermitian."
+    return res
 
 
 #############################################################################################################################################

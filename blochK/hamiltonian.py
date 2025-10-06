@@ -20,6 +20,9 @@ class Hamiltonian2D:
         self.n1 = n1  # lattice vector 1
         self.n2 = n2  # lattice vector 2
 
+        #Further consistency checks
+        assert self.check_hermiticity(np.array([1.3,-0.5]),np.array([0.2,2.])), "Hamiltonian_func is not Hermitian"
+        
         #define corresponding Brillouin zone
         n1_3D = np.array([n1[0], n1[1], 0])
         n2_3D = np.array([n2[0], n2[1], 0])
@@ -80,6 +83,13 @@ class Hamiltonian2D:
         param = self.param.copy()
         param.update(override_params)
         return self.Hamiltonian_func(kx, ky, **param)
+    
+
+    def check_hermiticity(self, kx, ky):
+        """Check if Hamiltonian_fct is Hermitian at (kx,ky)"""
+        Hk = self.evaluate(kx, ky)  # shape (n_orbitals, n_orbitals, *kx.shape)
+        Hk_dag = np.conjugate(np.swapaxes(Hk, 0, 1))  # Hermitian conjugate
+        return np.allclose(Hk, Hk_dag)
 
 
     def diagonalize(self, kx, ky, override_params={}):
