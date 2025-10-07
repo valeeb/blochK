@@ -1,6 +1,6 @@
 blochK makes solving Bloch Hamiltonians and calculating observables easy!
 
-I recommend using everything discussed in the tutorial:
+I recommend using everything discussed in the tutorials (these are python notebooks):
  - Hamiltonian
  - plotting
  - observables
