@@ -134,7 +134,8 @@ class BrillouinZone2D:
         epsilon = 1/Lk #ensures that the edge is not sampled twice
         idxs =np.linspace(-1+epsilon,1-epsilon,Lk)/2
         ks = np.meshgrid(idxs, idxs, indexing='ij')
-        ks = np.einsum('ij,jxy->ixy',np.array([self.m1, self.m2]),ks)
+        #i*m_1 + j*m_2
+        ks = np.einsum('ij,ixy->jxy',np.array([self.m1, self.m2]),ks)
         return ks
     
 

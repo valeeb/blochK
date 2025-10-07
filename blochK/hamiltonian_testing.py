@@ -4,6 +4,7 @@ import numpy as np
 from numpy import pi,cos,sin,exp
 
 from blochK.hamiltonian import Hamiltonian2D
+import blochK.utils.hamiltonian_fct
 
 
 def H_AM_fct(kx,ky,t=np.ones((2,2)),t12=0.,mu=-1,m=0): 
@@ -91,3 +92,53 @@ def create_Hsquare():
 
     return Hsquare
 
+
+###################################################################################
+#Haldane model
+###################################################################################
+
+#lattice vectors
+n1 = np.array([ 0.5,np.sqrt(3)/2])
+n2 = np.array([-0.5,np.sqrt(3)/2])
+
+def Haldane_fct(kx,ky, t=1, t2=0, m=0, mu=0):
+    """Defining the Haldane model.
+    t: nearest neighbor hopping
+    t2: next nearest neighbor hopping (imaginary)
+    m: staggered sublattice potential
+    mu: chemical potential
+    """
+    Hk = np.zeros((2,2,*kx.shape), dtype=complex)
+
+    kdotn1 = kx * n1[0] + ky * n1[1]
+    kdotn2 = kx * n2[0] + ky * n2[1]
+    f = 1 + np.exp(1j*kdotn1) + np.exp(1j*kdotn2)
+    g = np.sin(kdotn1) - np.sin(kdotn2) + np.sin(kdotn2 - kdotn1)
+    # NNN vectors (same-sublattice)
+    b1 = n1 - n2
+    b2 = -n1
+    b3 = -n2
+    kdotb1 = kx * b1[0] + ky * b1[1]
+    kdotb2 = kx * b2[0] + ky * b2[1]
+    kdotb3 = kx * b3[0] + ky * b3[1]
+    dz0 = - mu
+    dz  = m + 2.0 * t2 * (np.sin(kdotb1) + np.sin(kdotb2) + np.sin(kdotb3))
+
+    Hk[0,0] = dz0 + dz
+    Hk[1,1] = dz0 - dz
+    Hk[0,1] = -t * f
+    Hk = blochK.hamiltonian_fct.make_hermitian(Hk)
+    
+    return Hk
+
+
+def create_Haldane():
+    Haldane = Hamiltonian2D(Haldane_fct, n1=n1, n2=n2, basis=['sublattice'],basis_states=['A','B'],param=dict(t2=0.2/(3**0.5)*1.5,m=0.2))
+    Haldane.add_operator('sublattice',np.array([1,-1]))
+
+    Haldane.BZ.set_points({
+        'K':  (Haldane.BZ.m1 + 2*Haldane.BZ.m2)/3,
+        "K'": (2*Haldane.BZ.m1 + Haldane.BZ.m2)/3
+    })
+
+    return Haldane

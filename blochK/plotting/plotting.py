@@ -11,13 +11,14 @@ from blochK.observable import exp_value_O, isDegenerateIn
 from matplotlib.collections import LineCollection
 
 
-def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False):
+def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square'):
     """
     Plots Fermi surface of Hamiltonian on ax
     Parameters:
     ax: matplotlib axis
     Hamiltonian: Hamiltonian2D object
-    Lk: number of k points along each direction
+    Lk: number of k points along each direction. Mutually exclusive with np.ndarray form of kmesh
+    kmesh: 'square' (default) or 'BZ' or np.ndarray of shape (2,Lkx,Lky) with kx,ky points
     coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues), i..e. ndarraty of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
     """
     #check coloring operator
@@ -37,10 +38,20 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
     cmap.set_over(color='gray')
     norm = plt.Normalize(0, 1) # Create a continuous norm to map from data points to colors
 
-    ks = sample_square(Lk)
+    if kmesh=='BZ':
+        bBZ = Hamiltonian.BZ.return_boundary()
+        max = np.abs(bBZ).max()
+        ks = np.meshgrid(np.linspace(-max,max,Lk),np.linspace(-max,max,Lk),indexing='ij')
+        ks = np.array(ks)
+    elif kmesh=='square':
+        ks = sample_square(Lk)
+        max = pi
+    else:
+        assert isinstance(kmesh,np.ndarray) and kmesh.shape[0]==2, 'kmesh must be "square", "BZ" or an ndarray of shape (2,Lkx,Lky)'
+        ks = kmesh
     xs = ks[0]; ys = ks[1]
 
-    es,_ = Hamiltonian.diagonalize(xs,ys)
+    es,_ = Hamiltonian.diagonalize(*ks)
     
     ax.set_aspect('equal')
     if show_xlabel:
@@ -56,8 +67,8 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
     else:
         ax.set_yticklabels([])
     
-    ax.set_xlim(-pi,pi)
-    ax.set_ylim(-pi,pi)
+    ax.set_xlim(-max,max)
+    ax.set_ylim(-max,max)
     ax.set_xticks([-pi,0,pi])
     ax.set_yticks([-pi,0,pi])
     #--------------
