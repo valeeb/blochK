@@ -1,2 +1,2 @@
 #we want some of the methods to be directly accessible
-from .methods import berry_curvature, chern_number
+from .methods import berry_curvature, chern_number, conductivity_anomalous_Hall

@@ -1,4 +1,4 @@
-from blochK.topology import berry_curvature,chern_number
+from blochK.topology import berry_curvature,chern_number, conductivity_anomalous_Hall
 from blochK.hamiltonian_testing import create_Haldane
 import numpy as np
 
@@ -24,3 +24,12 @@ def test_chern_number():
 
     #check that the Chern number is close to 1 and -1 for the two bands
     assert np.allclose(np.abs(C), [1,1]), "Chern number should be close to 1 and -1 for the two bands"
+
+def test_conductivity_anomalous_Hall():
+    Haldane = create_Haldane()
+    Lk = 11
+
+    #trivial phase
+    Haldane.update_params(dict(t2=-0.2/(3**0.5)*0.5,m=0.2))
+    cond_trivial = conductivity_anomalous_Hall(Haldane,energy=np.array([0,1]),Lk=Lk)
+    assert cond_trivial.shape == (2,), "There are two energies, should return two conductivities"

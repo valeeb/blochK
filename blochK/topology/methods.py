@@ -4,10 +4,12 @@ from blochK.hamiltonian import Hamiltonian2D
 import numpy as np
 from numpy import pi,cos,sin,exp
 
+from .utils import berry_curvature_state
+
 
 def berry_curvature(Hamiltonian: Hamiltonian2D, Lk=51,kmesh=None):
     """
-    The Berry curvature ...
+    The Berry curvature 
     -----------
     Parameters:
     Hamiltonian : Hamiltonian2D object
@@ -30,12 +32,7 @@ def berry_curvature(Hamiltonian: Hamiltonian2D, Lk=51,kmesh=None):
     
     _,psis = Hamiltonian.diagonalize(*kmesh)
 
-    #the defined plaquettes includes 4 elementary plaquettes in order to expand around a central k point
-    y_step = np.einsum('byxi,byxi->byx',np.roll(psis,-1,axis=1),np.roll(np.conjugate(psis),1,axis=1))
-    x_step = np.einsum('byxi,byxi->byx',np.roll(psis,-1,axis=2),np.roll(np.conjugate(psis),1,axis=2))
-    
-    exp_of_flux = np.roll(y_step,1,axis=2) * np.conjugate(np.roll(y_step,-1,axis=2)) * np.roll(x_step,-1,axis=1) * np.conjugate(np.roll(x_step,1,axis=1))
-    flux = np.angle(exp_of_flux)/4
+    flux = berry_curvature_state(psis)
 
     if trim_edges: #for arbitrary kmesh, the edges are not correct.
         return flux[:,1:-1,1:-1], kmesh[:,1:-1,1:-1]
@@ -47,3 +44,31 @@ def chern_number(Hamiltonian: Hamiltonian2D,Lk=51):
     """Determines the Chern number of each band, all bands must be gapped, i.e. no crossings"""
     A = berry_curvature(Hamiltonian,Lk=Lk)
     return np.sum(A,axis=(1,2))/2/pi
+
+
+def conductivity_anomalous_Hall(Hamiltonian: Hamiltonian2D,energy=0,Lk=51):
+    """
+    Computes the intrinsic contribution to the anomalous Hall conductivity at zero temperature.
+    -----------
+    Parameters:
+    Hamiltonian : Hamiltonian2D object
+    energy : float or ndarray 
+    Lk : int
+    -----------
+    Returns:
+    sigma_xy : float
+        The anomalous Hall conductivity in units of e^2/hbar
+    """
+    if isinstance(energy,float) or isinstance(energy,int):
+        energy = np.array([energy])
+    else:
+        assert energy.ndim==1, "energy must be a scalar or a 1D array"
+
+    kmesh = Hamiltonian.BZ.sample(Lk)
+    es,psis = Hamiltonian.diagonalize(*kmesh)
+
+    berry_curv = berry_curvature_state(psis)[None,:,:,:] #shape (energy,nbands,Lkx,Lky)
+    fermi_occup = es[None,:,:,:]<energy[:,None,None,None]
+    sigma_xy = np.sum(berry_curv*fermi_occup,axis=(1,2,3))/2/pi 
+    
+    return sigma_xy
