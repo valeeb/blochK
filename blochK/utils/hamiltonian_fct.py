@@ -1,5 +1,12 @@
 import numpy as np
 
+#Pauli matrices
+sx = np.array([[0, 1], [1, 0]], dtype=complex)
+sy = np.array([[0, -1j], [1j, 0]], dtype=complex)
+sz = np.array([[1, 0], [0, -1]], dtype=complex)
+s0 = np.array([[1, 0], [0, 1]], dtype=complex)
+
+
 def make_hermitian(Hk:np.ndarray):
     """Adds the lower diagonal to the upper diagonal to make a matrix hermitian. Ignores the diagonal.
     Parameters:
@@ -21,3 +28,24 @@ def make_hermitian(Hk:np.ndarray):
     H_hermitian = np.moveaxis(np.moveaxis(H_hermitian, -1, 0), -1, 0) #shape (n1,n2,...)
 
     return H_hermitian
+
+
+def operator_expand_dims(list_of_operators,momenta):
+    """
+    Expands the dimensions of a list of operators such that they can be multiplied with momenta arrays.
+    -------------
+    Parameters:
+    list_of_operators : list of np.ndarray
+        List of operators to be expanded. Each operator should be a 2D array of shape (n_orbitals,n_orbitals).
+    momenta : np.ndarray. Input of a Hamiltonian function. 
+    -------------
+    Returns:
+    list of np.ndarray
+        List of operators with expanded dimensions. Each operator will have shape (n_orbitals,n_orbitals,1,1,...,1) where the number of 1's is equal to the number of dimensions in momenta.
+    -------------
+    Example:
+    Hk = np.zeros((2,2,*kx.shape),dtype=complex)
+    [s0,sx] = operator_expand_dims([s0,sx], kx)
+    Hk += s0*mu + sx*2*t*(np.cos(kx)+np.cos(ky))
+    """
+    return [np.expand_dims(op,axis=tuple([-i for i in range(1,len(momenta.shape)+1)])) for op in list_of_operators]
