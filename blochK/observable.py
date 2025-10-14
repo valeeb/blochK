@@ -288,7 +288,7 @@ def local_dos_QPI(Hamiltonian: Hamiltonian2D, Gamma=None,operator=0,Lk=50,kmesh=
 # I_a(w) = sum_{n,m,k} |M_a|^2 delta(E_m-E_n - w) n_FD(E_n) (1-n_FD(E_m))
 # where M_a = |<m|v_a|n>| and v_a = dH/dk_a
 
-def magnetic_linear_dichroism(Hamiltonian:Hamiltonian2D, omegas:np.ndarray, Lk=100, fact_eps=1):
+def magnetic_linear_dichroism(Hamiltonian:Hamiltonian2D, omegas:np.ndarray, Lk=100, fact_eps=1, return_matrix_elements=False):
     """
     Compute the magnetic linear dichroism spectrum of a 2D Hamiltonian.
     Parameters:
@@ -339,7 +339,10 @@ def magnetic_linear_dichroism(Hamiltonian:Hamiltonian2D, omegas:np.ndarray, Lk=1
     #difference of x and y absorption
     MLD_intensity = intensity_aw[0]-intensity_aw[1]
 
-    return MLD_intensity
+    if return_matrix_elements==False:
+        return MLD_intensity
+    else:
+        return MLD_intensity, np.abs(M_amnkq)**2
 
 
 #############################################################################################################################################

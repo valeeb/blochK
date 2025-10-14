@@ -4,7 +4,7 @@ from blochK.hamiltonian import Hamiltonian2D
 import numpy as np
 from numpy import pi,cos,sin,exp
 
-from .utils import berry_curvature_state
+from .utils import berry_curvature_state, partial_slogdets
 
 
 def berry_curvature(Hamiltonian: Hamiltonian2D, Lk=51,kmesh=None):
@@ -38,6 +38,72 @@ def berry_curvature(Hamiltonian: Hamiltonian2D, Lk=51,kmesh=None):
         return flux[:,1:-1,1:-1], kmesh[:,1:-1,1:-1]
     else:
         return flux
+    
+
+def berry_curvature_multiband_state(es,psis,energy=0,project_bands=True):
+    """The total non-Abelian Berry curvature below a given energy of a multiband systems. 
+    ----------
+    Parameters:
+    es: ndarray, shape=(n_bands,Lkx,Lky)
+        energys returned from Hamiltonian2D.diagonalize
+    psis: array-like, shape (n_bands,Lkx,Lky,n_orbital)
+        wavefunction returned from Hamiltonian2D.diagonalize
+    energy: float or ndarray
+        energy below which the effective total Berry curvature is computed
+    project_bands:
+        if True the bands are projected to a the subspace where they occupied. Becomes relevant for system with large number of bands above the maximal energy. 
+    ----------
+    Returns:
+        flux : array-like, shape (energy,Lkx,Lky) or (Lkx,Lky)
+    """
+
+    #Check if input is correct, make energy an array
+    if isinstance(energy,float) or isinstance(energy,int):
+        max_energy = energy
+        energy = np.array([energy])
+    else:
+        assert isinstance(energy,np.ndarray), "Energy must be a float,int or a ndarray"
+        max_energy = energy.max()
+
+    # project to fewer bands to reduce complexity
+    if project_bands:
+        occupied_bands = es.min(axis=(1,2))<max_energy
+        psis = psis[occupied_bands] #shape = (n_occ,Lkx,Lky,n_orbital)
+        es = es[occupied_bands]
+
+    #M(k,dk)_mn = <u_m(kx,ky)|u_n(kx+dkx,ky)> 
+    Mdx_xymn = np.einsum('mxyi,nxyi->xymn',psis,np.roll(np.conjugate(psis),1,axis=1))
+    Mdy_xymn = np.einsum('mxyi,nxyi->xymn',psis,np.roll(np.conjugate(psis),1,axis=2))
+
+    #Compute determinant of submatrix
+    #Udx_xyo = ( det(Mdx_xymn m,n<1), det(Mdx_xymn m,n<2), det(Mdx_xymn m,n<3), ...)
+    Udx_xyo = partial_slogdets(Mdx_xymn) 
+    Udy_xyo = partial_slogdets(Mdy_xymn) 
+
+    # Flux through plaqeuttes taking into account o bands
+    # Udx_o(k) * Udy_o(k+dkx) * Udx_o(k+dky)^* * Udy_o(k)^*
+    exp_of_flux_o = Udx_xyo * np.roll(Udy_xyo,1,axis=0) * np.conjugate(np.roll(Udx_xyo,1,axis=1)) * np.conjugate(Udy_xyo) 
+    flux_xyo = np.angle(exp_of_flux_o)/4
+
+    #select the flux with the right band multiplicity
+    flux_xyo = np.insert(flux_xyo,0,np.zeros_like(flux_xyo[:,:,0]),axis=-1) # add a zero flux layer for the unoccupied bands
+
+    flux_iexy = []
+    for es_corners in [es, np.roll(es,-1,axis=1), np.roll(es,-1,axis=2), np.roll(np.roll(es,-1,axis=2),-1,axis=1)]:
+        plaqutte_multiplicity_exy = (es_corners[None] < energy[:,None,None,None]).sum(axis=1) #number of occupied bands at each k-point
+        #broadcast to the fluxes in different occupation sectors
+        n_energys, Lx, Ly = plaqutte_multiplicity_exy.shape
+        n_idx, m_idx = np.indices((Lx, Ly))
+        n_idx = np.broadcast_to(n_idx, (n_energys, Lx, Ly))
+        m_idx = np.broadcast_to(m_idx, (n_energys, Lx, Ly))
+        e_idx = np.arange(n_energys)[:, None, None]
+        flux_iexy.append(flux_xyo[n_idx, m_idx, plaqutte_multiplicity_exy])
+    flux_exy = np.mean(flux_iexy,axis=0)
+
+    if flux_exy.shape[0]==1:
+        return flux_exy[0]
+    else:
+        return flux_exy
 
 
 def chern_number(Hamiltonian: Hamiltonian2D,Lk=51):
@@ -49,6 +115,7 @@ def chern_number(Hamiltonian: Hamiltonian2D,Lk=51):
 def conductivity_anomalous_Hall(Hamiltonian: Hamiltonian2D,energy=0,Lk=51):
     """
     Computes the intrinsic contribution to the anomalous Hall conductivity at zero temperature.
+    Uses the non-Abelian multiband berry curvature.
     -----------
     Parameters:
     Hamiltonian : Hamiltonian2D object
@@ -67,8 +134,8 @@ def conductivity_anomalous_Hall(Hamiltonian: Hamiltonian2D,energy=0,Lk=51):
     kmesh = Hamiltonian.BZ.sample(Lk)
     es,psis = Hamiltonian.diagonalize(*kmesh)
 
-    berry_curv = berry_curvature_state(psis)[None,:,:,:] #shape (energy,nbands,Lkx,Lky)
-    fermi_occup = es[None,:,:,:]<energy[:,None,None,None]
-    sigma_xy = np.sum(berry_curv*fermi_occup,axis=(1,2,3))/2/pi 
+    berry_curv = berry_curvature_multiband_state(es,psis,energy=energy) #shape (energy,Lkx,Lky)
+
+    sigma_xy = np.sum(berry_curv,axis=(-2,-1))/2/pi 
     
     return sigma_xy

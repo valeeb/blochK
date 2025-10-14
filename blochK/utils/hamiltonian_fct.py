@@ -36,12 +36,12 @@ def operator_expand_dims(list_of_operators,momenta):
     -------------
     Parameters:
     list_of_operators : list of np.ndarray
-        List of operators to be expanded. Each operator should be a 2D array of shape (n_orbitals,n_orbitals).
+        List of operators to be expanded. Each operator should be a 2D array of shape (n,n).
     momenta : np.ndarray. Input of a Hamiltonian function. 
     -------------
     Returns:
     list of np.ndarray
-        List of operators with expanded dimensions. Each operator will have shape (n_orbitals,n_orbitals,1,1,...,1) where the number of 1's is equal to the number of dimensions in momenta.
+        List of operators with expanded dimensions. Each operator will have shape (n,n,1,1,...,1) where the number of 1's is equal to the number of dimensions in momenta.
     -------------
     Example:
     Hk = np.zeros((2,2,*kx.shape),dtype=complex)
