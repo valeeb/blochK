@@ -130,7 +130,7 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma
     
     es,psis = Hamiltonian.diagonalize(ks[:,0],ks[:,1])
 
-    ax.axhline(0,linestyle='--',color='k',zorder=0)
+    #ax.axhline(0,linestyle='--',color='gray',zorder=0)
 
     if isinstance(coloring_operator,str): #if coloring operator is a color
         for iband in range(len(es)):
@@ -154,7 +154,7 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma
     ax.set_xticks(ticks)
     
     if show_ylabel:
-        ax.set_ylabel(r'$E/t$',labelpad=-4.5)
+        ax.set_ylabel(r'$E/t$',labelpad=-1)
     else:
         ax.set_yticklabels([])
     if show_xlabel:
