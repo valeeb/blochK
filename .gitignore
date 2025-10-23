@@ -30,3 +30,4 @@ venv/
 
 # Jupyter notebooks checkpoints
 .ipynb_checkpoints/
+peru*
