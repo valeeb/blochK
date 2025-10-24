@@ -25,7 +25,7 @@ def berry_curvature(Hamiltonian: Hamiltonian2D, Lk=51,kmesh=None):
     """
     if kmesh is None:
         trim_edges = False
-        kmesh = Hamiltonian.BZ.sample(Lk)
+        kmesh = Hamiltonian.BZ.sample(Lk,oversample_edge=True)
     else:
         trim_edges = True #kmesh does not correspond to unit cell of reciprocal lattice. Edges are incorrect.
         kmesh = np.array(kmesh)
@@ -36,8 +36,8 @@ def berry_curvature(Hamiltonian: Hamiltonian2D, Lk=51,kmesh=None):
 
     if trim_edges: #for arbitrary kmesh, the edges are not correct.
         return flux[:,1:-1,1:-1], kmesh[:,1:-1,1:-1]
-    else:
-        return flux
+    else: 
+        return flux[:,1:-1,1:-1] #edges are also trimmed because they are oversampled
     
 
 def berry_curvature_multiband_state(es,psis,energy=0,project_bands=True):

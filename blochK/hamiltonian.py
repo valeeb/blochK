@@ -122,17 +122,23 @@ class BrillouinZone2D:
         self.area = np.abs(m1[0]*m2[1] - m1[1]*m2[0])
 
 
-    def sample(self,Lk:int):
+    def sample(self,Lk:int,oversample_edge:bool=False):
         """Sample the Brillouin zone on a Lk x Lk grid
         Parameters:
         Lk: int
             Number of k-points along each direction
+        oversample_edge: bool
+            If True, sample 1 point more along each direction. The true BZ is then ks[:,1:-1,1:-1].
+            Useful for observables which involve |u_n(k)> and |u_n(k+dk)> if the Hamiltonian is gauge dependent. 
         Returns:
         ks: np.ndarray of shape (2, Lk, Lk)
             Sampled k-points in the Brillouin zone
         """
         epsilon = 1/Lk #ensures that the edge is not sampled twice
-        idxs =np.linspace(-1+epsilon,1-epsilon,Lk)/2
+        if oversample_edge:
+            idxs =np.linspace(-1-epsilon,1+epsilon,Lk+2)/2
+        else:
+            idxs =np.linspace(-1+epsilon,1-epsilon,Lk)/2
         ks = np.meshgrid(idxs, idxs, indexing='ij')
         #i*m_1 + j*m_2
         ks = np.einsum('ij,ixy->jxy',np.array([self.m1, self.m2]),ks)
