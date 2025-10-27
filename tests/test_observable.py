@@ -81,7 +81,7 @@ def test_conductivity_and_conductivity_orbital_resolved():
 #############################################################################################################################################
 #QPIs
 #############################################################################################################################################
-def test_conductivity():
+def test_local_dos_QPI():
     param = dict(t=1,m=0.4)
     H = create_Hsquare()
     H.set_params(param)
@@ -106,6 +106,19 @@ def test_magnetic_linear_dichroism():
     assert mld.shape == (len(omegas),), "MLD should have the same length as omegas"
     assert np.isclose(mld, 0).all(), "MLD should be zero for block diagonal matrix"
 
+#############################################################################################################################################
+#Edelstein effect
+#############################################################################################################################################
+def test_current_density_correlator():
+    param = dict(t=1,m=0.4)
+    H = create_Hsquare()
+    H.set_params(param)
+
+    chi = observable.current_density_correlator(H,Lk=5,operator_density=H.operator.spin)
+    assert chi.shape == (2,)
+
+    chi = observable.current_density_correlator(H,Lk=5,operator_density=H.operator.spin,energy=np.linspace(-3,3,4))
+    assert chi.shape == (2, 4)
 
 #############################################################################################################################################
 #helper functions

@@ -23,7 +23,7 @@ def H_AM_fct(kx,ky,t=np.ones((2,2)),t12=0.,mu=-1,m=0):
     #make hermitian
     Hk[1,0] = np.conjugate(Hk[0,1])
 
-    return 
+    return Hk
 
 
 def H_2o_AM_fct(kx,ky,t1=1,t2=1,t12=0.,mu=-1,m_F=0,m_AF=0): 
@@ -78,6 +78,53 @@ def Hsquare_fct(kx,ky,t=1,mu=-1,m=0):
     #add magnetization in z direction
     Hk[0,0] -= m
     Hk[1,1] += m
+
+    return Hk
+
+
+def H_pAFM_collinear_fct(kx,ky,t=1,delta=0.,mu=-1,m=0): 
+    """
+    Minimal model for a collinear p-wave AFM. 
+    t: NN hopping
+    delta: unisotropy in p-wave pairing
+    m: staggered magnetization
+    """
+    Hk = np.zeros((4,4,*kx.shape),dtype=complex) #Basis (up,down)
+
+
+    #set hamiltonian structure
+    Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) - mu
+    Hk[1,1] = -2*t*cos(kx+pi) - 2*t*cos(ky+pi) - mu
+    Hk[0,1] = m + delta * sin(kx)
+    #make hermitian
+    Hk[1,0] = np.conjugate(Hk[0,1])
+
+    #set hamiltonian structure
+    Hk[2,2] = -2*t*cos(kx) - 2*t*cos(ky) - mu
+    Hk[3,3] = -2*t*cos(kx+pi) - 2*t*cos(ky+pi) - mu
+    Hk[2,3] = -m + delta * sin(kx)
+    #make hermitian
+    Hk[3,2] = np.conjugate(Hk[2,3])
+
+    return Hk
+
+
+def H_pAFM_fct(kx,ky,t=1,alpha=np.zeros(2),mu=-1,m=0): 
+    """
+    Minimal model for a p-wave AFM. 
+    t: NN hopping
+    d_phase: positive phase shift in x direction of the up spin and phase shift in -x direction of the down spin
+    """
+    Hk = np.zeros((4,4,*kx.shape),dtype=complex) #Basis (up A, up B, down A, down B)
+
+    #set hamiltonian structure
+    Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) + alpha[0]*sin(kx) + alpha[1]*sin(ky) - mu
+    Hk[1,1] = -2*t*cos(kx) - 2*t*cos(ky) + alpha[0]*sin(kx) + alpha[1]*sin(ky)- mu
+    Hk[2,2] = -2*t*cos(kx) - 2*t*cos(ky) - alpha[0]*sin(kx) - alpha[1]*sin(ky)- mu
+    Hk[3,3] = -2*t*cos(kx) - 2*t*cos(ky) - alpha[0]*sin(kx) - alpha[1]*sin(ky)- mu
+    #make hermitian
+    Hk[0,2] = Hk[2,0] = -m
+    Hk[1,3] = Hk[3,1] = +m 
 
     return Hk
 
