@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.linalg import lstsq, null_space
+from collections.abc import Iterable
 
 pauli_vector = np.array(
     [
@@ -9,6 +10,7 @@ pauli_vector = np.array(
         np.array([[1, 0], [0, -1]]),  # sigma z
     ]
 )
+
 
 def d_matrix(d_vector):
     """generates a 2x2 matrix of the form
@@ -69,7 +71,7 @@ def vector_to_t_values(vector, hoppings_list):
     return t_values
 
 
-def constraints_from_weyl_node(weyl_pos, chirality):
+def constraints_from_weyl_node(weyl_pos, chirality = None):
     """Returns the constraints that place a Weyl node of the form
     chirality * sigma . k around the specified weyl position.
 
@@ -80,13 +82,16 @@ def constraints_from_weyl_node(weyl_pos, chirality):
     Returns:
         set: The constraints in the form {(position, derivative, value)}
     """
+    if not isinstance(chirality, Iterable):
+        chirality = (chirality, chirality, chirality)
 
     weyl_pos = tuple(weyl_pos)
     zero_order = weyl_pos, (0, 0, 0), (0, 0, 0, 0)
-    x_deriv = weyl_pos, (1, 0, 0), (0, chirality, 0, 0)
-    y_deriv = weyl_pos, (0, 1, 0), (0, 0, chirality, 0)
-    z_deriv = weyl_pos, (0, 0, 1), (0, 0, 0, chirality)
+    x_deriv = weyl_pos, (1, 0, 0), (0, chirality[0], 0, 0)
+    y_deriv = weyl_pos, (0, 1, 0), (0, 0, chirality[1], 0)
+    z_deriv = weyl_pos, (0, 0, 1), (0, 0, 0, chirality[2])
     return {zero_order, x_deriv, y_deriv, z_deriv}
+
 
 def _derivative_factor(position, derivative, hopping):
     # computes the factor arising from applying the derivative operator
@@ -96,6 +101,7 @@ def _derivative_factor(position, derivative, hopping):
     for dim in range(len(position)):
         prefactor *= (-1j * hopping[dim]) ** (derivative[dim])
     return prefactor * expo
+
 
 def constraint_as_matrix_entry(constraint, hoppings_list):
     """Given a single constraint, of the form (position, derivative, value),
@@ -120,17 +126,25 @@ def constraint_as_matrix_entry(constraint, hoppings_list):
         factors[hopping] = factor
 
     rows = []
-    for j in range(4):
+    values_out = []
+    for j,v in enumerate(value):
+        if v is None: 
+            continue
+
         factor_j = {
             hopping: factors[hopping] * np.eye(4)[j] for hopping in hoppings_list
         }
         r, keys = t_values_to_vector(factor_j)
         rows.append(r)
+        values_out.append(v)
 
         # make sure the keys are still in the same order
         assert keys == hoppings_list
 
-    return np.array(rows), value
+    rows = np.array(rows)
+    values_out = np.array(values_out)
+    return rows, values_out
+
 
 def total_matrix_from_constraints(constraints, hoppings_list):
     """Given a set of constraints, builds the total constraint matrix
@@ -153,7 +167,8 @@ def total_matrix_from_constraints(constraints, hoppings_list):
         values.extend(value)
     return np.vstack(rows), np.array(values)
 
-# TODO: Add a test for this function
+
+
 def solve_constraint_matrix(matrix, value_vector):
     """Solves the constraint matrix equation Ax = b, where A is the
     constraint matrix, x is the vector of t_values, and b is the value vector.
@@ -167,15 +182,10 @@ def solve_constraint_matrix(matrix, value_vector):
 
     rank_matrix = np.linalg.matrix_rank(matrix)
     rank_augmented = np.linalg.matrix_rank(np.column_stack([matrix, value_vector]))
-
-    if rank_matrix < rank_augmented:
-        print(
-            "\nSystem is inconsistent (no solution).\nToo many constraints and not enough hoppings?"
-        )
-        # return None
-
+    assert rank_matrix == rank_augmented, f"\nSystem is inconsistent (no solution).\nM_rank: {rank_matrix} < Aug_rank: {rank_augmented}"
+      
     sol, residuals, _, _ = lstsq(matrix, value_vector)
-    assert residuals.size == 0
+    assert np.allclose(residuals,0)
 
     null_basis = null_space(matrix)
     return sol, null_basis
