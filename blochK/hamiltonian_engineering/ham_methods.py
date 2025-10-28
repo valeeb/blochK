@@ -79,25 +79,26 @@ def two_band_hamiltonian_3d(
     # add hermitian conjugate
     return hk + np.moveaxis(hk, 1, 0).conj()
 
-
-# TODO: Add a test for this function
 def d_vector(t_values, k_vals):
     """Computes the d-vector at each k-point given a dictionary of hopping terms, works in arbitrary
     dimensions (usually 2D or 3D).
     Args:
         t_values (dict): a dictionary of every lattice vector and the associated (complex)
             Pauli vector for it
-        k_vals (np.ndarray): array of k-values (shape (N, D)), with D the dimension and N
-            the number of k-points
+        k_vals (np.ndarray): array of k-values (shape (D, N...)), with D the dimension and N
+            the number of k-points in many axes as it could be an array
     Returns:
         np.ndarray: d-vectors at each k-point
     """
 
-    d_vec = np.zeros((4, len(k_vals)))
+    d_vec = np.zeros((4, *k_vals.shape[1:]))
 
     for hopping in t_values:
-        phase = np.exp(1j * np.sum(k_vals * np.array(hopping), axis=1))
-        values = t_values[hopping][:, None] * phase[None, :]
+
+        phase = np.exp(1j * np.einsum("i,i...->...", np.array(hopping), k_vals))
+        v = np.array(t_values[hopping])
+        values = np.einsum("j,k...->jk...", v, phase)
         d_vec += values.real * 2
 
     return d_vec
+
