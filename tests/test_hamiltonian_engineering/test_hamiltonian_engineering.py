@@ -7,6 +7,10 @@ from blochK.hamiltonian_engineering.utils import (
     constraint_as_matrix_entry,
     total_matrix_from_constraints,
     solve_constraint_matrix,
+    constraints_from_weyl_node
+)
+from blochK.hamiltonian_engineering.ham_methods import (
+    d_vector
 )
 
 
@@ -111,4 +115,38 @@ def test_total_matrix_from_constraints():
     assert np.allclose(matrix_2d, expected_matrix_2d), "Mismatch in total constraint matrix 2D"
 
     
+def test_d_vector():
+    
+    t_values_3 = {
+        (0, 0, 0): (0, 0, 0, 2),
+        (1, 0, 0): (0, 1j, 0, -1),
+        (0, 1, 0): (0, 0, 1j, -1),
+        (0, 0, 1): (0, 0, 0, -1),
+    }
+    t_values_2 = {
+        (0, 0): (0, 0, 0, 4),
+        (1, 0): (0, 1j, 0, -1),
+        (0, 1): (0, 0, 1j, -1),
+    }
 
+    kx, ky, kz = [np.linspace(0,2*np.pi, 10)]*3
+    KXY = np.array(np.meshgrid(kx, ky))
+    KXYZ = np.array(np.meshgrid(kx, ky,kz))
+
+    d_vector(t_values_3, KXYZ)
+    d_vector(t_values_2, KXY)
+
+def test_placing_weyl_nodes():
+    allowed_hoppings = sorted(
+        [
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 1, 0),
+            (0, 0, 1),
+        ]
+    )
+    c1 = constraints_from_weyl_node((np.pi, 0, np.pi * 0.5), (1, 1, 1))
+    c2 = constraints_from_weyl_node((np.pi, 0.0, -np.pi * 0.5), (1, 1, -1))
+    c = c1|c2
+    m, v = total_matrix_from_constraints(c, allowed_hoppings)
+    solve_constraint_matrix(m, v)
