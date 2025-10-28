@@ -1,0 +1,81 @@
+import numpy as np
+import matplotlib
+from matplotlib import pyplot as plt
+
+
+
+def plot_3d_d_matrix(kx, ky, kz, d_function):
+    k_xyz_vals = np.array(np.meshgrid(kx, ky, kz))
+    d_values = d_function(k_xyz_vals)
+    xy_mags = np.sqrt(d_values[1] ** 2 + d_values[2] ** 2)
+
+    # magnitude and colormap
+    d_mag = np.sqrt(np.einsum("i...,i...->...", d_values, d_values))
+    cvals = [0.0, *np.linspace(0.05 * np.max(d_mag), np.max(d_mag), 10)]
+    colors = [
+        "red",
+        *[matplotlib.colormaps["Blues"](i) for i in np.linspace(0, 1, 10)],
+    ]
+    norm = plt.Normalize(min(cvals), max(cvals))
+    tuples = list(zip(map(norm, cvals), colors))
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", tuples)
+
+    document_width = 240
+    figwidth = document_width / 25.4
+    figheight = len(kz) * figwidth / 3 - 2
+    fig, axes = plt.subplots(
+        len(kz), 3, figsize=(document_width / 25.4, figheight), dpi=300
+    )
+    for j,_ in enumerate(kz):
+
+        # xy_part
+        KX = k_xyz_vals[0, :, :, j]
+        KY = k_xyz_vals[1, :, :, j]
+        axes[j, 0].streamplot(
+            KX,
+            KY,
+            d_values[1, :, :, j],
+            d_values[2, :, :, j],
+            color="black",
+            linewidth=0.6,
+            density=1,
+            arrowsize=0.6,
+        )
+        im_mag = axes[j, 0].pcolor(
+            KX,
+            KY,
+            xy_mags[:, :, j],
+            cmap="Greens",
+            vmin=0,
+            vmax=np.max(xy_mags),
+        )
+
+        # z_part
+        mag_z = axes[j, 1].pcolor(
+            KX,
+            KY,
+            d_values[3, :, :, j],
+            cmap="RdBu_r",
+            vmin=-np.max(np.abs(d_values[3, :, :, :])),
+            vmax=np.max(np.abs(d_values[3, :, :, :])),
+        )
+
+        mag_sum = axes[j, 2].pcolor(
+            KX,
+            KY,
+            d_mag[:, :, j],
+            cmap=cmap,
+            norm=norm,
+        )
+
+        # choose colourmap for cbar
+        cbar1 = fig.colorbar(im_mag, ax=axes[j, 0], fraction=0.046, pad=0.04)
+        cbar2 = fig.colorbar(mag_z, ax=axes[j, 1], fraction=0.046, pad=0.04)
+        cbar3 = fig.colorbar(mag_sum, ax=axes[j, 2], fraction=0.046, pad=0.04)
+        axes[j, 0].set_title(r"$xy$ Components, $k_z={:.2f}$".format(kz[j]))
+        axes[j, 1].set_title(r"$z$ Component, $k_z={:.2f}$".format(kz[j]))
+        axes[j, 2].set_title(r"Total Magnitude, $k_z={:.2f}$".format(kz[j]))
+
+    for a in axes.flatten():
+        a.set_aspect('equal')
+    return fig, axes
