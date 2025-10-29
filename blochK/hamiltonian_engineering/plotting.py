@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib
 from matplotlib import pyplot as plt
-
+import matplotlib.ticker as tck
 
 
 def plot_3d_d_matrix(kx, ky, kz, d_function):
@@ -26,11 +26,11 @@ def plot_3d_d_matrix(kx, ky, kz, d_function):
     fig, axes = plt.subplots(
         len(kz), 3, figsize=(document_width / 25.4, figheight), dpi=300
     )
-    for j,_ in enumerate(kz):
+    for j, _ in enumerate(kz):
 
         # xy_part
-        KX = k_xyz_vals[0, :, :, j]
-        KY = k_xyz_vals[1, :, :, j]
+        KX = k_xyz_vals[0, :, :, j]/np.pi
+        KY = k_xyz_vals[1, :, :, j]/np.pi
         axes[j, 0].streamplot(
             KX,
             KY,
@@ -72,10 +72,18 @@ def plot_3d_d_matrix(kx, ky, kz, d_function):
         cbar1 = fig.colorbar(im_mag, ax=axes[j, 0], fraction=0.046, pad=0.04)
         cbar2 = fig.colorbar(mag_z, ax=axes[j, 1], fraction=0.046, pad=0.04)
         cbar3 = fig.colorbar(mag_sum, ax=axes[j, 2], fraction=0.046, pad=0.04)
-        axes[j, 0].set_title(r"$xy$ Components, $k_z={:.2f}$".format(kz[j]))
-        axes[j, 1].set_title(r"$z$ Component, $k_z={:.2f}$".format(kz[j]))
-        axes[j, 2].set_title(r"Total Magnitude, $k_z={:.2f}$".format(kz[j]))
+        axes[j, 0].set_title(r"$xy$ Components, $k_z={:.2f}\pi$".format(kz[j] / np.pi))
+        axes[j, 1].set_title(r"$z$ Component, $k_z={:.2f}\pi$".format(kz[j] / np.pi))
+        axes[j, 2].set_title(r"Total Magnitude, $k_z={:.2f}\pi$".format(kz[j] / np.pi))
 
     for a in axes.flatten():
-        a.set_aspect('equal')
+        a.set_aspect("equal")
+        a.axhline(1, linestyle="--", c="k",linewidth = 0.8)
+        a.axhline(-1, linestyle="--", c="k",linewidth = 0.8)
+        a.axvline(1, linestyle="--", c="k",linewidth = 0.8)
+        a.axvline(-1, linestyle="--", c="k",linewidth = 0.8)
+
+        a.xaxis.set_major_formatter(tck.FormatStrFormatter(r"%g $\pi$"))
+        a.xaxis.set_major_locator(tck.MultipleLocator(base=.5))
+
     return fig, axes
