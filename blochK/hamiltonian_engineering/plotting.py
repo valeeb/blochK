@@ -85,5 +85,7 @@ def plot_3d_d_matrix(kx, ky, kz, d_function):
 
         a.xaxis.set_major_formatter(tck.FormatStrFormatter(r"%g $\pi$"))
         a.xaxis.set_major_locator(tck.MultipleLocator(base=.5))
+        a.yaxis.set_major_formatter(tck.FormatStrFormatter(r"%g $\pi$"))
+        a.yaxis.set_major_locator(tck.MultipleLocator(base=.5))
 
     return fig, axes
