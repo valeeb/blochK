@@ -28,22 +28,8 @@ def two_band_hamiltonian_2d(
 
 # TODO: Add a test for this function
 def two_band_hamiltonian_3d(
-    kx: np.ndarray, ky: np.ndarray, t_values: dict, len_z=20, open_bcs_z=True
+    kx: np.ndarray, ky: np.ndarray, t_values: dict, len_z=20, open_bcs_z=False
 ) -> np.ndarray:
-    """Generates an arbitrary 3D slab Hamiltonian based on a dictionary specifying the d-values
-    for hoppings in arbitrary directions.
-
-    Args:
-        kx (np.ndarray): List of kx values
-        ky (np.ndarray): List of ky values
-        t_values (dict): a dictionary of every lattiCe vector and the associated (complex)
-            d vector for it
-        len_z (int, optional): number of layers in the z-direction. Defaults to 20.
-        open_bcs_z (bool, optional): Open or closed boundary conditions. Defaults to True.
-
-    Returns:
-        np.ndarray: An array of Hamiltonians
-    """
 
     hk = np.zeros((2 * len_z, 2 * len_z, *kx.shape), dtype=complex)
 
@@ -52,32 +38,37 @@ def two_band_hamiltonian_3d(
 
         d_mat = d_matrix(t_values[hopping])  # hopping matrix
 
-        # the (0,0,0) component has no hermitian conjugate
-        # so must be real and will be doubledlater, let's half it
-        if hopping == (0, 0, 0):
-            d_mat = d_mat / 2
-
         phases = np.exp(-1j * kx * hopping[0] - 1j * ky * hopping[1])  # phases
-
-        # term_to_add = phases[:, None, None] * d_mat
-        term_to_add = np.multiply.outer(d_mat, phases)
+        terms_to_add = np.einsum("ij, ... -> ij...", d_mat, phases)
 
         ind1 = np.arange(len_z)
-        ind2 = np.arange(len_z) + hopping[2]
+        ind2 = ind1 + hopping[2]
+
         if open_bcs_z:  # either assign only hoppings that don't cross the boundary
             ind1 = ind1[(ind2 < len_z) * (ind2 >= 0)]
             ind2 = ind2[(ind2 < len_z) * (ind2 >= 0)]
         else:  # or wrap around the periodic boundaries
             ind2 = ind2 % len_z
 
-        # add the hoppings in
-        hk[2 * ind1, 2 * ind2] += term_to_add[0, 0]
-        hk[2 * ind1 + 1, 2 * ind2] += term_to_add[1, 0]
-        hk[2 * ind1, 2 * ind2 + 1] += term_to_add[0, 1]
-        hk[2 * ind1 + 1, 2 * ind2 + 1] += term_to_add[1, 1]
+        hk[ind1 * 2, ind2 * 2] += terms_to_add[0, 0]
+        hk[ind2 * 2, ind1 * 2] += terms_to_add[0, 0].conj()
 
-    # add hermitian conjugate
-    return hk + np.moveaxis(hk, 1, 0).conj()
+        hk[ind1 * 2+1 , ind2 * 2] += terms_to_add[1, 0]
+        hk[ind2 * 2, ind1 * 2+1] += terms_to_add[1, 0].conj()
+
+        hk[ind1 * 2, ind2 * 2+1] += terms_to_add[0, 1]
+        hk[ind2 * 2+1, ind1 * 2] += terms_to_add[0, 1].conj()
+
+        hk[ind1 * 2+1, ind2 * 2+1] += terms_to_add[1, 1]
+        hk[ind2 * 2+1, ind1 * 2+1] += terms_to_add[1, 1].conj()
+
+
+
+    return hk
+
+
+
+
 
 def d_vector(t_values, k_vals):
     """Computes the d-vector at each k-point given a dictionary of hopping terms, works in arbitrary

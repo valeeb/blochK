@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import linalg as la
 from scipy.linalg import lstsq, null_space
 from collections.abc import Iterable
 
@@ -187,5 +188,11 @@ def solve_constraint_matrix(matrix, value_vector):
     sol, residuals, _, _ = lstsq(matrix, value_vector)
     assert np.allclose(residuals,0)
 
+    # cleans up the null space
     null_basis = null_space(matrix)
-    return sol, null_basis
+    proj = np.einsum("ij,jk -> ik", null_basis, null_basis.conj().T  )
+    proj = np.einsum("ij,j,jk -> ik",proj,np.arange(proj.shape[0])+1 ,proj)
+    e,v = la.eigh(proj)
+    v_good = v[:, e > 0.1]
+
+    return sol, v_good
