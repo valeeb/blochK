@@ -1,4 +1,5 @@
 import numpy as np
+from jax import numpy as jnp
 from scipy import linalg as la
 from scipy.linalg import lstsq, null_space
 from collections.abc import Iterable
@@ -190,8 +191,8 @@ def solve_constraint_matrix(matrix, value_vector):
 
     # cleans up the null space
     null_basis = null_space(matrix)
-    proj = np.einsum("ij,jk -> ik", null_basis, null_basis.conj().T  )
-    proj = np.einsum("ij,j,jk -> ik",proj,np.arange(proj.shape[0])+1 ,proj)
+    proj = jnp.einsum("ij,jk -> ik", null_basis, null_basis.conj().T  )
+    proj = jnp.einsum("ij,j,jk -> ik",proj,np.arange(proj.shape[0])+1 ,proj)
     e,v = la.eigh(proj)
     v_good = v[:, e > 0.1]
 

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib
 from matplotlib import pyplot as plt
 import matplotlib.ticker as tck
-
+from jax import numpy as jnp
 
 def plot_3d_d_matrix(kx, ky, kz, d_function):
     k_xyz_vals = np.array(np.meshgrid(kx, ky, kz))
@@ -10,7 +10,7 @@ def plot_3d_d_matrix(kx, ky, kz, d_function):
     xy_mags = np.sqrt(d_values[1] ** 2 + d_values[2] ** 2)
 
     # magnitude and colormap
-    d_mag = np.sqrt(np.einsum("i...,i...->...", d_values, d_values))
+    d_mag = d_values[0] + np.sqrt(jnp.einsum("i...,i...->...", d_values[1:], d_values[1:]))
     cvals = [0.0, *np.linspace(0.05 * np.max(d_mag), np.max(d_mag), 10)]
     colors = [
         "red",
@@ -24,7 +24,7 @@ def plot_3d_d_matrix(kx, ky, kz, d_function):
     figwidth = document_width / 25.4
     figheight = len(kz) * figwidth / 3 - 2
     fig, axes = plt.subplots(
-        len(kz), 3, figsize=(document_width / 25.4, figheight), dpi=300
+        len(kz), 3, figsize=(document_width / 25.4, figheight), dpi=200
     )
     for j, _ in enumerate(kz):
 
@@ -37,9 +37,9 @@ def plot_3d_d_matrix(kx, ky, kz, d_function):
             d_values[1, :, :, j],
             d_values[2, :, :, j],
             color="black",
-            linewidth=0.6,
-            density=1,
-            arrowsize=0.6,
+            linewidth=0.5,
+            density=1.3,
+            arrowsize=0.4,
         )
         im_mag = axes[j, 0].pcolor(
             KX,
