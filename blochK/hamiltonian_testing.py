@@ -82,29 +82,16 @@ def Hsquare_fct(kx,ky,t=1,mu=-1,m=0):
     return Hk
 
 
-def H_pAFM_collinear_fct(kx,ky,t=1,delta=0.,mu=-1,m=0): 
+def H_pAFM_diag_fct(kx,ky,t=1,delta=0.,mu=-1,m=0): 
     """
-    Minimal model for a collinear p-wave AFM. 
+    Minimal model spin-diagonal p-wave AFM. 
     t: NN hopping
     delta: unisotropy in p-wave pairing
-    m: staggered magnetization
     """
-    Hk = np.zeros((4,4,*kx.shape),dtype=complex) #Basis (up,down)
-
-
+    Hk = np.zeros((2,2,*kx.shape),dtype=complex) #Basis (up,down)
     #set hamiltonian structure
-    Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) - mu
-    Hk[1,1] = -2*t*cos(kx+pi) - 2*t*cos(ky+pi) - mu
-    Hk[0,1] = m + delta * sin(kx)
-    #make hermitian
-    Hk[1,0] = np.conjugate(Hk[0,1])
-
-    #set hamiltonian structure
-    Hk[2,2] = -2*t*cos(kx) - 2*t*cos(ky) - mu
-    Hk[3,3] = -2*t*cos(kx+pi) - 2*t*cos(ky+pi) - mu
-    Hk[2,3] = -m + delta * sin(kx)
-    #make hermitian
-    Hk[3,2] = np.conjugate(Hk[2,3])
+    Hk[0,0] = -2*(t+delta)*cos(kx) - 2*t*cos(ky) - mu + delta * (sin(kx) + sin(2*kx + delta))
+    Hk[1,1] = -2*(t+delta)*cos(kx) - 2*t*cos(ky) - mu - delta * (sin(kx) + sin(2*kx - delta))
 
     return Hk
 

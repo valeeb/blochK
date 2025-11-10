@@ -348,9 +348,6 @@ def magnetic_linear_dichroism(Hamiltonian:Hamiltonian2D, omegas:np.ndarray, Lk=1
 #############################################################################################################################################
 # Current-Density Correlator (Edelstein effect)
 #############################################################################################################################################
-# MLD(w) = I_x(w) - I_y(w)
-# I_a(w) = sum_{n,m,k} |M_a|^2 delta(E_m-E_n - w) n_FD(E_n) (1-n_FD(E_m))
-# where M_a = |<m|v_a|n>| and v_a = dH/dk_a
 
 def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energy=0,operator_current=None,operator_density=None,Lk=50,optimize='path'):
     """
@@ -397,7 +394,7 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
         j_iabxy = np.einsum('n,inmkq->inmkq',operator_current,v) #.shape = (2,localH,localH,k,q)
     else: #operator.shape = (localH,localH)
         j_iabxy = np.einsum('ln,inmkq->ilmkq',operator_current,v)/2 + np.einsum('inmkq,ml->inlkq',v,operator_current)/2 #.shape = (2,localH,localH,Lq,Lq) #antisymmetrized version if s,
-    
+
     #calculate the density_operator
     if operator_density is None: #identity operator if none given
         localH = Hk.shape[0]
@@ -407,7 +404,6 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
         dens_oper_ab = np.diag(operator_density) #.shape = (localH,localH)
     else: #operator.shape = (localH,localH)
         dens_oper_ab = operator_density
-
 
     if isinstance(energy,float) or isinstance(energy,int):
         Greenfct = 1/((es-energy)+ 1j*Gamma) #.shape = (band,Lq,Lq)
@@ -434,7 +430,7 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
 
         Greenfct = 1/((es[None]-energy[:,None,None,None])+ 1j*Gamma) #.shape = (energy,band,Lq,Lq)
         Greenfct_combination_enmxy = Greenfct[:,:,None]*np.conjugate(Greenfct)[:,None,:] - Greenfct[:,None,:]*Greenfct[:,:,None]  #.shape = (e,n,m,Lq,Lq)
-
+        
         #compute the product of all these quantities
         #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
         if optimize=='path':
@@ -451,6 +447,63 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
         
         return np.real(chi)/Lk**2 /np.pi/2  #.shape = (2,energy)
 
+
+def edelstein_susceptibility_spin_commuting(Hamiltonian: Hamiltonian2D,Gamma:float=None,energy=np.array([0]),operator_density=None,Lk=50):
+    """
+    Evalutes the current-density correlation function with respect to an operator. A special case is the Edelstein effect for operator_density=spin.
+    Parameters:
+    'Hamiltonian': Hamiltonian2D object
+    'Gamma':  spectral broadening
+    'energy': float or np.ndarray, 
+        additional energy at which the susceptibility is evaluated. Default is 0 (Fermi level)
+    'operator_density': the operator wich specifcies the type of the measure moment. .shape = (localH). Default is the spin operator, other choices could be the spin operator when a spin moment is measured. 
+    'Lk': number of k-points in the q-direction
+    'kmesh_BZ': the k-points of the Brillouin zone. If None, square BZ is sampled with 100x100 points
+    """
+    #sampling the BZ
+    ks = Hamiltonian.BZ.sample(Lk,oversample_edge=True)
+
+    #compute the hamiltonian, eigenvalues and eigenstates
+    Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
+    es,psi = Hamiltonian.diagonalize(*ks) #.shape=(band,k,q,localH)
+
+    #define broadening if not given
+    if Gamma is None:
+        Gamma = find_Gamma(es,weighting_factor=1.2)
+
+    #compute the derivatives of e along unit vectors of BZ
+    #this is dangerous if there are degnerate points. (the definition of what a band is chnages)
+    # dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
+    # v1 = -(np.roll(es,1,axis=1)-np.roll(es,-1,axis=1))/dk/2 #along first axis
+    # v2 = -(np.roll(es,1,axis=2)-np.roll(es,-1,axis=2))/dk/2 #along second axis
+    # v = np.array([v1,v2]) #.shape = (2,band,k,q)
+
+    #compute the derivatives of Hk along unit vectors of BZ
+    dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
+    v1 = -(np.roll(Hk,1,axis=2)-np.roll(Hk,-1,axis=2))/dk/2 #along first axis
+    v2 = -(np.roll(Hk,1,axis=3)-np.roll(Hk,-1,axis=3))/dk/2 #along second axis
+    v = np.array([v1,v2]) #.shape = (2,localH,localH,k,q)
+    v = np.einsum('iabxy,nxya,nxyb->inxy',v,np.conj(psi),psi) #.shape = (2,band,k,q)
+    v = np.real(v)
+
+    # cut off the edges which are there 3 times.
+    v = v[:,:,1:-1,1:-1]
+    es = es[:,1:-1,1:-1]
+    psi = psi[:,1:-1,1:-1]
+    
+    #calculate the density_operator
+    if operator_density is None: #identity operator if none given
+        operator_density = Hamiltonian.operator.spin
+    density = exp_value_Odiag(operator_density,psi)
+    
+    # we use a different representation of the spectral function, to align with `curerent_density_correlator`
+    # standard: dos = Gamma   /((es[None]-energy[:,None,None,None])**2+Gamma**2)/np.pi #.shape = (energy,band,Lq,Lq)
+    dos = Gamma**3/((es[None]-energy[:,None,None,None])**2+Gamma**2)**2 * 2 #.shape = (energy,band,Lq,Lq)
+
+    #compute the product of all these quantities
+    chi = np.einsum('nxy,inxy,enxy->ie',density,v,dos)
+
+    return chi/Lk**2 /np.pi/2  #.shape = (2,energy)
 
 #############################################################################################################################################
 #helper functions

@@ -120,6 +120,17 @@ def test_current_density_correlator():
     chi = observable.current_density_correlator(H,Lk=5,operator_density=H.operator.spin,energy=np.linspace(-3,3,4))
     assert chi.shape == (2, 4)
 
+def test_edelstein_susceptibility_spin_commuting():
+    param = dict(t=1,m=0.4)
+    H = create_Hsquare()
+    H.set_params(param)
+
+    chi = observable.edelstein_susceptibility_spin_commuting(H,Lk=5)
+    assert chi.shape == (2,1)
+
+    chi = observable.edelstein_susceptibility_spin_commuting(H,Lk=5,energy=np.linspace(-3,3,4))
+    assert chi.shape == (2, 4)
+
 #############################################################################################################################################
 #helper functions
 #############################################################################################################################################
