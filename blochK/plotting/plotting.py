@@ -10,8 +10,7 @@ from blochK.observable import exp_value_O, isDegenerateIn
 #for coloring lines
 from matplotlib.collections import LineCollection
 
-
-def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square'):
+def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square',threshold_degeneracy:float=3):
     """
     Plots Fermi surface of Hamiltonian on ax
     Parameters:
@@ -20,6 +19,7 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
     Lk: number of k points along each direction. Mutually exclusive with np.ndarray form of kmesh
     kmesh: 'square' (default) or 'BZ' or np.ndarray of shape (2,Lkx,Lky) with kx,ky points
     coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues), i..e. ndarraty of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
+    threshold_degeneracy: threshold to consider two eigenvalues as degenerate for coloring purposes (this is the -log10 of the threshold, i.e. threshold=3 means 0.001)
     """
     #check coloring operator
     if isinstance(coloring_operator,str):
@@ -84,7 +84,7 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
                         segments = np.concatenate([points[:-1], points[1:]], axis=1) #create a list of N-1 lines form v0 to v1, from v1 to v2,...
                         es_FS,psis_FS = Hamiltonian.diagonalize(datapoints[:,0],datapoints[:,1]) #determine es, psis along contour
                         Os = exp_value_O(coloring_operator,psis_FS)
-                        isDeg = isDegenerateIn(es_FS,Os,threshold=3)
+                        isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy)
                         lc = LineCollection(segments,cmap=cmap,norm=norm, capstyle='projecting')
 
                         normalized_color = (1-1e-10)*(Os[iband]+1)/2 + 1e-15 - 10*isDeg[iband] # shift regular values from interval [0,1] to (0,1) by infinitesimals, make degnerate entries negative
@@ -97,7 +97,7 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
 
                     
 
-def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma','X','R','Y',r'\Gamma'],N_samples=100, coloring_operator='k',show_xlabel=True,show_ylabel=True,cmap='none'):
+def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma','X','R','Y',r'\Gamma'],N_samples=100, coloring_operator='k',show_xlabel=True,show_ylabel=True,cmap='none',threshold_degeneracy:float=3):
     """
     Plots Fermi surface of Hamiltonian on ax
     Parameters:
@@ -107,6 +107,7 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma
     points_path: list of k-points defining the path in the BZ, default None, in which case it is taken from labels_points_path
     labels_points_path: list of labels for the k-points defining the path in the BZ
     coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues), i..e. ndarray of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
+    threshold_degeneracy: threshold to consider two eigenvalues as degenerate for coloring purposes (this is the -log10 of the threshold, i.e. threshold=3 means 0.001)
     """
 
     #if no path is given, get it from the labels, assuming they are in the BZ points
@@ -138,7 +139,7 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma
     else: #if coloring operator is an operator
         #plot band with coloring given by Ss
         Os = exp_value_O(np.array(coloring_operator),psis)
-        isDeg = isDegenerateIn(es,Os,threshold=3)
+        isDeg = isDegenerateIn(es,Os,threshold=threshold_degeneracy)
 
         for iband in range(len(es)):
             ax.plot(ts,es[iband],alpha=0)
