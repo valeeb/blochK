@@ -349,7 +349,7 @@ def magnetic_linear_dichroism(Hamiltonian:Hamiltonian2D, omegas:np.ndarray, Lk=1
 # Current-Density Correlator (Edelstein effect)
 #############################################################################################################################################
 
-def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energy=0,operator_current=None,operator_density=None,Lk=50,optimize='path'):
+def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energy=0,operator_current=None,operator_density=None,Lk=50,optimize='path',k_resolve:bool=False):
     """
     Evalutes the current-density correlation function with respect to an operator. A special case is the Edelstein effect for operator_density=spin.
     Parameters:
@@ -363,7 +363,15 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
     'Lk': number of k-points in the q-direction
     'kmesh_BZ': the k-points of the Brillouin zone. If None, square BZ is sampled with 100x100 points
     'optimize': optimization strategy for the computation, see numpy.einsum documentation, for a new problem use 'find_path' first, store it in function and use 'path'
+    'k_resolve': if True, returns the k-resolved correlator, shape=(localH,Lk,Lk). Currently only works for energy=float, and optimize='greedy'
     """
+    #check if inputs are valid
+    if k_resolve:
+        assert not (isinstance(energy,float) or isinstance(energy,int)), "k_resolve currently only works for energy=float or int"
+        if optimize!='greedy':
+            print("Warning: k_resolve currently only works for optimize='greedy', switching to optimize='greedy'")
+            optimize='greedy'
+
     #sampling the BZ
     ks = Hamiltonian.BZ.sample(Lk,oversample_edge=True)
 
@@ -411,6 +419,14 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
 
         #compute the product of all these quantities
         #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
+        
+        #k-resolved version
+        if k_resolve:
+            #k-resolved version
+            chi_k = np.einsum('nkqa,ab,mkqb,mkqc,icdkq,nkqd,nmkq->ikq',np.conjugate(psi),dens_oper_ab,psi,np.conjugate(psi),j_iabxy,psi,Greenfct_combination_nmxy,optimize='greedy')
+            return np.real(chi_k)/Lk**2 /np.pi/2  #.shape = (2,Lq,Lq)
+
+        #full contraction over k-points
         if optimize=='path':
             opt_path = ['einsum_path', (0, 1), (0, 5), (3, 4), (0, 3), (1, 2), (0, 1)]
             chi = np.einsum('nkqa,ab,mkqb,mkqc,icdkq,nkqd,nmkq->i',np.conjugate(psi),dens_oper_ab,psi,np.conjugate(psi),j_iabxy,psi,Greenfct_combination_nmxy,optimize=opt_path)
@@ -422,7 +438,7 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
             chi = np.einsum('nkqa,ab,mkqb,mkqc,icdkq,nkqd,nmkq->i',np.conjugate(psi),dens_oper_ab,psi,np.conjugate(psi),j_iabxy,psi,Greenfct_combination_nmxy,optimize='greedy')
         else:
             chi = np.einsum('nkqa,ab,mkqb,mkqc,icdkq,nkqd,nmkq->i',np.conjugate(psi),dens_oper_ab,psi,np.conjugate(psi),j_iabxy,psi,Greenfct_combination_nmxy)
-        
+
         return np.real(chi)/Lk**2 /np.pi/2 #.shape = (2,)
     
     else: #energy is an array
