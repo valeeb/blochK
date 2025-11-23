@@ -131,24 +131,47 @@ def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,Lk
     else: #operator.shape = (localH,localH)
         jspin = np.einsum('ln,inmkq->ilmkq',operator,v)/2 + np.einsum('inmkq,ml->inlkq',v,operator)/2 #.shape = (2,localH,localH,Lq,Lq) #antisymmetrized version if s,
     
-    Greenfct = Gamma/((es-energy)**2+Gamma**2) #.shape = (band,Lq,Lq)
+    if isinstance(energy,float) or isinstance(energy,int):
+        Greenfct = Gamma/((es-energy)**2+Gamma**2) #.shape = (band,Lq,Lq)
 
-    #compute the product of all these quantities
-    #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
-    if optimize=='path':
-        opt_path = ['einsum_path', (0, 6), (1, 5), (1, 5), (0, 4), (1, 2), (0, 2), (0, 1)]
-        sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
-    elif optimize=='find_path': #returns the optimal path, no results!
-        opt_path = np.einsum_path('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
-        print('Optimal contraction path found:',opt_path)
-        return opt_path
-    elif optimize=='greedy':
-        sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
-    else:
-        sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+        #compute the product of all these quantities
+        #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
+        if optimize=='path':
+            opt_path = ['einsum_path', (0, 6), (1, 5), (1, 5), (0, 4), (1, 2), (0, 2), (0, 1)]
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
+        elif optimize=='find_path': #returns the optimal path, no results!
+            opt_path = np.einsum_path('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
+            print('Optimal contraction path found:',opt_path)
+            return opt_path
+        elif optimize=='greedy':
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
+        else:
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+        
+        return np.real(sigma)/Lk**2 /np.pi #.shape=(2,2)
     
+    else: #energy is an array
+        assert isinstance(energy,np.ndarray), "energy must be a float or an np.ndarray"
+
+        Greenfct = 1/((es[None]-energy[:,None,None,None])+ 1j*Gamma) #.shape = (energy,band,Lq,Lq)
+
+        #compute the product of all these quantities
+        #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
+        if optimize=='path':
+            opt_path = ['einsum_path', (0, 1), (0, 6), (0, 1), (0, 4), (2, 3), (0, 1, 2)]
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
+        elif optimize=='find_path': #returns the optimal path, no results!
+            opt_path = np.einsum_path('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
+            print('Optimal contraction path found:',opt_path)
+            return opt_path
+        elif optimize=='greedy':
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
+        else:
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+        
+        return np.real(sigma)/Lk**2 /np.pi #.shape=(2,2,energy)
     
-    return np.real(sigma)/Lk**2 /np.pi
+
 
 
 def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,Lk=50,optimize='path'):
@@ -182,25 +205,49 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
     v1 = -(np.roll(Hk,1,axis=2)-np.roll(Hk,-1,axis=2))/dk/2 #along first axis
     v2 = -(np.roll(Hk,1,axis=3)-np.roll(Hk,-1,axis=3))/dk/2 #along second axis
     v = np.array([v1,v2]) #.shape = (2,localH,localH,k,q)
-        
-    Greenfct = Gamma/((es-energy)**2+Gamma**2) #.shape = (band,Lq,Lq)
+    
 
-    #compute the product of all these quantities
-    #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
-    if optimize=='path':
-        opt_path = ['einsum_path', (0, 6), (1, 5), (1, 5), (0, 4), (1, 2), (0, 2), (0, 1)]
-        sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
-    elif optimize=='find_path': #returns the optimal path, no results!
-        opt_path = np.einsum_path('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
-        print('Optimal contraction path found:',opt_path)
-        return opt_path
-    elif optimize=='greedy':
-        sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
-    else:
-        sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+    if isinstance(energy,float) or isinstance(energy,int):
+
+        Greenfct = Gamma/((es-energy)**2+Gamma**2) #.shape = (band,Lq,Lq)
+
+        #compute the product of all these quantities
+        #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
+        if optimize=='path':
+            opt_path = ['einsum_path', (0, 6), (1, 5), (1, 5), (0, 4), (1, 2), (0, 2), (0, 1)]
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
+        elif optimize=='find_path': #returns the optimal path, no results!
+            opt_path = np.einsum_path('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
+            print('Optimal contraction path found:',opt_path)
+            return opt_path
+        elif optimize=='greedy':
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
+        else:
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->aij',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+        
+        return np.real(sigma)/Lk**2 /np.pi #.shape=(localH,2,2)
     
-    
-    return np.real(sigma)/Lk**2 /np.pi
+    else: #energy is an array
+        assert isinstance(energy,np.ndarray), "energy must be a float or an np.ndarray"
+
+        Greenfct = 1/((es[None]-energy[:,None,None,None])+ 1j*Gamma) #.shape = (energy,band,Lq,Lq)
+
+        #compute the product of all these quantities
+        #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
+        if optimize=='path':
+            opt_path = ['einsum_path', (1, 2), (0, 6), (0, 1), (0, 4), (2, 3), (0, 1, 2)]
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->aije',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
+        elif optimize=='find_path': #returns the optimal path, no results!
+            opt_path = np.einsum_path('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->aije',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
+            print('Optimal contraction path found:',opt_path)
+            return opt_path
+        elif optimize=='greedy':
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->aije',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
+        else:
+            sigma = np.einsum('nkqa,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->aije',np.conjugate(psi),v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+
+        return np.real(sigma)/Lk**2 /np.pi #.shape=(localH,2,2,energy)
+
 
 
 #############################################################################################################################################
@@ -367,7 +414,7 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
     """
     #check if inputs are valid
     if k_resolve:
-        assert not (isinstance(energy,float) or isinstance(energy,int)), "k_resolve currently only works for energy=float or int"
+        assert isinstance(energy,float) or isinstance(energy,int), "k_resolve currently only works for energy=float or int"
         if optimize!='greedy':
             print("Warning: k_resolve currently only works for optimize='greedy', switching to optimize='greedy'")
             optimize='greedy'
@@ -419,7 +466,7 @@ def current_density_correlator(Hamiltonian: Hamiltonian2D,Gamma:float=None,energ
 
         #compute the product of all these quantities
         #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
-        
+
         #k-resolved version
         if k_resolve:
             #k-resolved version

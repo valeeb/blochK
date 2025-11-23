@@ -55,6 +55,10 @@ def test_conductivity():
     assert sigma.shape == (2, 2)
     assert np.isclose(sigma[0,0], sigma[1,1]) #xx and yy should be equal by symmetry
 
+    sigma = observable.conductivity(H,operator=H.operator.spin, energy=np.array([-0.1,0,0.1]))
+    assert sigma.shape == (2, 2, 3)
+    assert np.allclose(sigma[0,0], sigma[1,1]) #xx and yy should be equal by symmetry
+
 
 def test_conductivity_orbital_resolved():
     H = create_Hsquare()
@@ -62,6 +66,9 @@ def test_conductivity_orbital_resolved():
 
     sigma = observable.conductivity_orbital_resolved(H)
     assert sigma.shape == (2, 2, 2)
+
+    sigma = observable.conductivity_orbital_resolved(H,energy=np.array([-0.1,0,0.1]))
+    assert sigma.shape == (2, 2, 2, 3)
 
 
 def test_conductivity_and_conductivity_orbital_resolved():

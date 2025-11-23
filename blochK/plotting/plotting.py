@@ -10,7 +10,7 @@ from blochK.observable import exp_value_O, isDegenerateIn
 #for coloring lines
 from matplotlib.collections import LineCollection
 
-def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square',threshold_degeneracy:float=3):
+def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square',threshold_degeneracy:int=3):
     """
     Plots Fermi surface of Hamiltonian on ax
     Parameters:
@@ -38,39 +38,42 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
     cmap.set_over(color='gray')
     norm = plt.Normalize(0, 1) # Create a continuous norm to map from data points to colors
 
-    if kmesh=='BZ':
-        bBZ = Hamiltonian.BZ.return_boundary()
-        max = np.abs(bBZ).max()
-        ks = np.meshgrid(np.linspace(-max,max,Lk),np.linspace(-max,max,Lk),indexing='ij')
-        ks = np.array(ks)
-    elif kmesh=='square':
-        ks = sample_square(Lk)
-        max = pi
+    if isinstance(kmesh,str):
+        assert kmesh in ['square','BZ'], 'kmesh must be "square", "BZ" (or an ndarray of shape (2,Lkx,Lky))"'
+        if kmesh=='BZ':
+            bBZ = Hamiltonian.BZ.return_boundary()
+            max = np.abs(bBZ).max()
+            ks = Hamiltonian.BZ.sample(Lk)
+            ks = np.array(ks)
+        elif kmesh=='square':
+            ks = sample_square(Lk)
+            max = pi
+
+            if show_xlabel:
+                ax.set_xlabel(r'$k_x$',labelpad=1)
+                ax.set_xticks([-pi,0,pi])
+                ax.set_xticklabels([r'$-\pi$',0,r'$\pi$'])
+            else:
+                ax.set_xticklabels([])
+            if show_ylabel:
+                ax.set_ylabel(r'$k_y$',labelpad=-2.5)
+                ax.set_yticks([-pi,0,pi])
+                ax.set_yticklabels([r'$-\pi$',0,r'$\pi$'])
+            else:
+                ax.set_yticklabels([])
+            
+            ax.set_xlim(-max,max)
+            ax.set_ylim(-max,max)
+            ax.set_xticks([-pi,0,pi])
+            ax.set_yticks([-pi,0,pi])
     else:
-        assert isinstance(kmesh,np.ndarray) and kmesh.shape[0]==2, 'kmesh must be "square", "BZ" or an ndarray of shape (2,Lkx,Lky)'
+        assert isinstance(kmesh,np.ndarray) and kmesh.shape[0]==2, 'kmesh must be an ndarray of shape (2,Lkx,Lky) (or "square","BZ")'
         ks = kmesh
     xs = ks[0]; ys = ks[1]
 
     es,_ = Hamiltonian.diagonalize(*ks)
     
     ax.set_aspect('equal')
-    if show_xlabel:
-        ax.set_xlabel(r'$k_x$',labelpad=1)
-        ax.set_xticks([-pi,0,pi])
-        ax.set_xticklabels([r'$-\pi$',0,r'$\pi$'])
-    else:
-        ax.set_xticklabels([])
-    if show_ylabel:
-        ax.set_ylabel(r'$k_y$',labelpad=-2.5)
-        ax.set_yticks([-pi,0,pi])
-        ax.set_yticklabels([r'$-\pi$',0,r'$\pi$'])
-    else:
-        ax.set_yticklabels([])
-    
-    ax.set_xlim(-max,max)
-    ax.set_ylim(-max,max)
-    ax.set_xticks([-pi,0,pi])
-    ax.set_yticks([-pi,0,pi])
     #--------------
     if show_FS:
         for iband in range(len(es)): #for each band
@@ -97,7 +100,7 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
 
                     
 
-def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma','X','R','Y',r'\Gamma'],N_samples=100, coloring_operator='k',show_xlabel=True,show_ylabel=True,cmap='none',threshold_degeneracy:float=3):
+def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=None,N_samples=100, coloring_operator='k',show_xlabel=True,show_ylabel=True,cmap='none',threshold_degeneracy:int=3):
     """
     Plots Fermi surface of Hamiltonian on ax
     Parameters:
@@ -109,13 +112,20 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=[r'\Gamma
     coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues), i..e. ndarray of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
     threshold_degeneracy: threshold to consider two eigenvalues as degenerate for coloring purposes (this is the -log10 of the threshold, i.e. threshold=3 means 0.001)
     """
+    #if nothing is given, create a default path
+    if points_path is None and labels_points_path is None: 
+        labels_points_path = ['\Gamma','X','R','Y','\Gamma']
 
-    #if no path is given, get it from the labels, assuming they are in the BZ points
+    #if points_path is not given, make it from labels
     if points_path is None: 
         if not all([p in Hamiltonian.BZ.points.keys() for p in labels_points_path]):
             raise ValueError('all labels in labels_points_path must be in Hamiltonian.BZ.points')
         points_path = [Hamiltonian.BZ.points[p] for p in labels_points_path]
         labels_points_path=[r'${}$'.format(l) for l in labels_points_path] #transform to latex format
+
+    #if no labels are given, make the labels from the path points
+    if labels_points_path is None:
+        labels_points_path = [f'({p[0]:.2f},{p[1]:.2f})' for p in points_path]
 
     #setting the path
     ts, ks, ticks = path(points_path,N_samples=N_samples)

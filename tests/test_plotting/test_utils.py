@@ -41,7 +41,7 @@ def test_sample_reduced_square_basic():
 def test_extent():
     # 1) Integer input
     ext = extent(4)
-    assert isinstance(ext, list)
+    assert isinstance(ext, np.ndarray)
     assert len(ext) == 4
     assert ext[0] < ext[1] and ext[2] < ext[3]
     
@@ -49,7 +49,7 @@ def test_extent():
     Lk = 4
     kx, ky = np.meshgrid(np.linspace(-1, 1, Lk), np.linspace(-1, 1, Lk), indexing='ij')
     ext = extent([kx, ky])
-    assert isinstance(ext, list)
+    assert isinstance(ext, np.ndarray)
     assert len(ext) == 4
     # Check that extent slightly extends beyond the min/max
     assert ext[0] < kx.min() and ext[1] > kx.max()
