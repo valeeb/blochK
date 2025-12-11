@@ -5,8 +5,6 @@ import copy
 import matplotlib.pyplot as plt
 import scipy.integrate as integrate
 
-from blochK import Hamiltonian2D
-
 
 def line_integration(ks,O,closed=True):
     """Computes a line integral along a closed path given by ks (shape=(2,ks)). O (shape=(:,...,:,ks)) is the integrand"""
@@ -28,36 +26,36 @@ def line_integration(ks,O,closed=True):
 
 
 
-def get_points_FS(Hamiltonian:Hamiltonian2D,energys=[0],show=False,Lk:int=100):
-    """
-    Gives the coordinates of the Fermi surface of a Hamiltonian object 
-    Parameters:
-    Hamiltonian: Hamiltonian2D object
-    energys: list of energies at which to compute the Fermi surface
-    show: bool, if True shows the contour plot used to compute the Fermi surface
-    Lk: int, number of k points along each direction
-    Returns:
-    paths:  
-        list of lists (not a tensor because different segments can have different lengths)
-        axis order is (bands, energys, segments in the BZ, points of each segment, x and y cooridinates)
-    """
+def get_points_FS(E,Lk=100,n1=np.array([2*pi,0]),n2=np.array([0,2*pi]),n0=np.array([0,0]),mus=[0],show=False,Eargs={}):
+    """Computes the area/BZ of all closed orbits of the reduced Brillouin zone spanned by n1,n2 around n0. Important: Make sure only a single orbit lies in this region and is closed!"""
+    #E: dispersion relation; function
+    #Nlin: linear spacing of the grid; integer
+    #n1,n2: reciprocal vector 1,2; nd.array, shape=(2)
+    #n0: center of the reduced brillouin zone; nd.array, shape=(2)
+    #mus: fillings; nd.array of floats
+    #args: arguments of E except first one
+    #Returns: relative area(s); nd.array of len(mus)
+    n0 = np.array(n0);n1=np.array(n1);n2=np.array(n2)
 
-    ks = Hamiltonian.BZ.sample(Lk=Lk)
-    es,_ = Hamiltonian.diagonalize(*ks)
+    ks = np.array([[i * n1 + j * n2 + n0 for i in np.linspace(-0.5, 0.5, Lk+1)] for j in np.linspace(-0.5, 0.5, Lk)])
+    [X, Y] = ks.transpose((2, 1, 0))  # the grid for contour
+    ks = np.swapaxes(ks,0,2)
 
-    fig, axs = plt.subplots(1,len(es),figsize=(12,1.5))
-    if len(es)==1: axs = [axs]
+    es_bands = E(*ks,**Eargs)
+
+    fig, axs = plt.subplots(1,len(es_bands),figsize=(12,1.5))
+    if len(es_bands)==1: axs = [axs]
     
-    paths = [] #list of bands, list of energys, list of segments, points, x and y components(2)
-    for band in range(es.shape[0]):
-        es_band = es[band]
-        cs = axs[band].contour(*ks, es_band.T, levels=energys)
+    paths = [] #list of bands, list of mus, list of segments, points, x and y components(2)
+    for band in range(es_bands.shape[0]):
+        es = es_bands[band]
+        cs = axs[band].contour(X.T, Y.T, es.T, levels=mus)
         axs[band].clabel(cs, inline=False, fontsize=10)
         axs[band].set_aspect('equal')
-        coords = cs.allsegs #coordinates: energys, number of paths, points, x and y components(2)
+        coords = cs.allsegs #coordinates: mus, number of paths, points, x and y components(2)
 
         paths.append([])
-        for i in range(len(energys)):# Get one of the contours from the plot.
+        for i in range(len(mus)):# Get one of the contours from the plot.
             if len(coords[i])>0:
                 paths[-1].append([x.T for x in coords[i]])
             else:

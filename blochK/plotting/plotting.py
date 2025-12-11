@@ -10,6 +10,28 @@ from blochK.observable import exp_value_O, isDegenerateIn
 #for coloring lines
 from matplotlib.collections import LineCollection
 
+
+def set_colormap(cmap,default_cmap='brg'):
+    """
+    internal function to choose a colormap
+    """
+    if cmap=='none':
+        cmap = copy.copy(matplotlib.colormaps[default_cmap]) #set the name of the colormap
+    elif isinstance(cmap,str):
+        cmap = copy.copy(matplotlib.colormaps[cmap]) #set the name of the colormap
+    elif isinstance(cmap,matplotlib.colors.Colormap):
+        cmap = copy.copy(cmap)
+    else:
+        raise ValueError('cmap must be "none", a string with the name of a matplotlib colormap, or a matplotlib.colors.Colormap instance')
+    cmap.set_under(color='black') #this colors is used for degenerate entries
+    cmap.set_over(color='deeppink')
+
+    return cmap
+
+
+    
+
+
 def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square',threshold_degeneracy:int=3):
     """
     Plots Fermi surface of Hamiltonian on ax
@@ -30,12 +52,7 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
         raise ValueError('coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian')
     
     #setting a nice colormap
-    if cmap=='none':
-        cmap = copy.copy(matplotlib.colormaps["brg"]) #set the name of the colormap
-    else:
-        cmap = copy.copy(matplotlib.colormaps[cmap]) #set the name of the colormap
-    cmap.set_under(color='black')
-    cmap.set_over(color='gray')
+    cmap = set_colormap(cmap)
     norm = plt.Normalize(0, 1) # Create a continuous norm to map from data points to colors
 
     if isinstance(kmesh,str):
@@ -114,7 +131,7 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=None,N_sa
     """
     #if nothing is given, create a default path
     if points_path is None and labels_points_path is None: 
-        labels_points_path = ['\Gamma','X','R','Y','\Gamma']
+        labels_points_path = [r'\Gamma','X','R','Y',r'\Gamma']
 
     #if points_path is not given, make it from labels
     if points_path is None: 
@@ -131,12 +148,7 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=None,N_sa
     ts, ks, ticks = path(points_path,N_samples=N_samples)
 
     #setting a nice colormap
-    if cmap=='none':
-        cmap = copy.copy(matplotlib.colormaps["brg"]) #set the name of the colormap
-    else:
-        cmap = copy.copy(matplotlib.colormaps[cmap]) #set the name of the colormap
-    cmap.set_under(color='black')
-    cmap.set_over(color='gray')
+    cmap = set_colormap(cmap)
     norm = plt.Normalize(0, 1) # Create a continuous norm to map from data points to colors
     
     es,psis = Hamiltonian.diagonalize(ks[:,0],ks[:,1])

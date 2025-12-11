@@ -153,7 +153,7 @@ def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,Lk
     else: #energy is an array
         assert isinstance(energy,np.ndarray), "energy must be a float or an np.ndarray"
 
-        Greenfct = 1/((es[None]-energy[:,None,None,None])+ 1j*Gamma) #.shape = (energy,band,Lq,Lq)
+        Greenfct = Gamma/((es[None]-energy[:,None,None,None])**2+ Gamma**2) #.shape = (energy,band,Lq,Lq)
 
         #compute the product of all these quantities
         #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
@@ -208,8 +208,7 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
     
 
     if isinstance(energy,float) or isinstance(energy,int):
-
-        Greenfct = Gamma/((es-energy)**2+Gamma**2) #.shape = (band,Lq,Lq)
+        Greenfct = Gamma/((es-energy)**2+ Gamma**2) #.shape = (band,Lq,Lq)
 
         #compute the product of all these quantities
         #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
@@ -229,8 +228,7 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
     
     else: #energy is an array
         assert isinstance(energy,np.ndarray), "energy must be a float or an np.ndarray"
-
-        Greenfct = 1/((es[None]-energy[:,None,None,None])+ 1j*Gamma) #.shape = (energy,band,Lq,Lq)
+        Greenfct = Gamma/((es[None]-energy[:,None,None,None])**2+ Gamma**2)  #.shape = (energy,band,Lq,Lq)
 
         #compute the product of all these quantities
         #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
