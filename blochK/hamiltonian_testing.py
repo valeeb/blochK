@@ -60,6 +60,7 @@ def H_2o_AM_fct(kx,ky,t1=1,t2=1,t12=0.,mu=-1,m_F=0,m_AF=0):
 
 def Hsquare_fct(kx,ky,t=1,mu=-1,m=0): 
     """
+    Simplest 2D square lattice model with ferromagnetism.
     t: NN hopping 
     mu: chemical potential
     m: FM
@@ -68,6 +69,31 @@ def Hsquare_fct(kx,ky,t=1,mu=-1,m=0):
 
     #set hamiltonian structure
     Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) - mu
+
+    #make hermitian
+    Hk[1,0] = np.conjugate(Hk[0,1])
+
+    #spin degenerate
+    Hk[1:,1:] = Hk[:1,:1]
+
+    #add magnetization in z direction
+    Hk[0,0] -= m
+    Hk[1,1] += m
+
+    return Hk
+
+
+def H3Dsquare_fct(kx,ky,kz,t=1,mu=-1,m=0): 
+    """
+    Simplest 3D square lattice model with ferromagnetism.
+    t: NN hopping 
+    mu: chemical potential
+    m: FM
+    """
+    Hk = np.zeros((2,2,*kx.shape),dtype=complex) #Basis (up,down)
+
+    #set hamiltonian structure
+    Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) - 2*t*cos(kz) - mu
 
     #make hermitian
     Hk[1,0] = np.conjugate(Hk[0,1])

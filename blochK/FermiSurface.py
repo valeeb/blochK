@@ -51,7 +51,7 @@ def get_points_FS(Hamiltonian:Hamiltonian2D,energys=[0],show=False,Lk:int=100):
     paths = [] #list of bands, list of energys, list of segments, points, x and y components(2)
     for band in range(es.shape[0]):
         es_band = es[band]
-        cs = axs[band].contour(*ks, es_band.T, levels=energys)
+        cs = axs[band].contour(*ks, es_band, levels=energys)
         axs[band].clabel(cs, inline=False, fontsize=10)
         axs[band].set_aspect('equal')
         coords = cs.allsegs #coordinates: energys, number of paths, points, x and y components(2)
