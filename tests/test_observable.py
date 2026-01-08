@@ -53,8 +53,12 @@ def test_conductivity():
 
     sigma = observable.conductivity(H,operator=H.operator.spin)
     assert sigma.shape == (2, 2)
-    assert np.isclose(sigma[0,0], sigma[1,1]) #xx and yy should be equal by symmetry
+    assert np.isclose(sigma[0,0], sigma[1,1]), "sigma_xx and sigma_yy should be equal by symmetry"
 
+    sigma_e = observable.conductivity(H,operator=H.operator.spin, energy=np.array([-0.1,0,0.1]))
+    assert sigma_e.shape == (2, 2, 3)
+    assert np.allclose(sigma_e[0,0], sigma_e[1,1]), "sigma_xx and sigma_yy should be equal by symmetry for each energy"
+    assert np.isclose(sigma_e[:,:,1], sigma).all(), "conductivity with array input or float/integer input should be equal for same energy"
 
 def test_conductivity_orbital_resolved():
     H = create_Hsquare()
@@ -62,6 +66,9 @@ def test_conductivity_orbital_resolved():
 
     sigma = observable.conductivity_orbital_resolved(H)
     assert sigma.shape == (2, 2, 2)
+
+    sigma = observable.conductivity_orbital_resolved(H,energy=np.array([-0.1,0,0.1]))
+    assert sigma.shape == (2, 2, 2, 3)
 
 
 def test_conductivity_and_conductivity_orbital_resolved():
@@ -81,7 +88,7 @@ def test_conductivity_and_conductivity_orbital_resolved():
 #############################################################################################################################################
 #QPIs
 #############################################################################################################################################
-def test_conductivity():
+def test_local_dos_QPI():
     param = dict(t=1,m=0.4)
     H = create_Hsquare()
     H.set_params(param)
@@ -106,6 +113,30 @@ def test_magnetic_linear_dichroism():
     assert mld.shape == (len(omegas),), "MLD should have the same length as omegas"
     assert np.isclose(mld, 0).all(), "MLD should be zero for block diagonal matrix"
 
+#############################################################################################################################################
+#Edelstein effect
+#############################################################################################################################################
+def test_current_density_correlator():
+    param = dict(t=1,m=0.4)
+    H = create_Hsquare()
+    H.set_params(param)
+
+    chi = observable.current_density_correlator(H,Lk=5,operator_density=H.operator.spin)
+    assert chi.shape == (2,)
+
+    chi = observable.current_density_correlator(H,Lk=5,operator_density=H.operator.spin,energy=np.linspace(-3,3,4))
+    assert chi.shape == (2, 4)
+
+def test_edelstein_susceptibility_spin_commuting():
+    param = dict(t=1,m=0.4)
+    H = create_Hsquare()
+    H.set_params(param)
+
+    chi = observable.edelstein_susceptibility_spin_commuting(H,Lk=5)
+    assert chi.shape == (2,1)
+
+    chi = observable.edelstein_susceptibility_spin_commuting(H,Lk=5,energy=np.linspace(-3,3,4))
+    assert chi.shape == (2, 4)
 
 #############################################################################################################################################
 #helper functions

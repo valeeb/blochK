@@ -23,7 +23,7 @@ def H_AM_fct(kx,ky,t=np.ones((2,2)),t12=0.,mu=-1,m=0):
     #make hermitian
     Hk[1,0] = np.conjugate(Hk[0,1])
 
-    return 
+    return Hk
 
 
 def H_2o_AM_fct(kx,ky,t1=1,t2=1,t12=0.,mu=-1,m_F=0,m_AF=0): 
@@ -60,6 +60,7 @@ def H_2o_AM_fct(kx,ky,t1=1,t2=1,t12=0.,mu=-1,m_F=0,m_AF=0):
 
 def Hsquare_fct(kx,ky,t=1,mu=-1,m=0): 
     """
+    Simplest 2D square lattice model with ferromagnetism.
     t: NN hopping 
     mu: chemical potential
     m: FM
@@ -78,6 +79,65 @@ def Hsquare_fct(kx,ky,t=1,mu=-1,m=0):
     #add magnetization in z direction
     Hk[0,0] -= m
     Hk[1,1] += m
+
+    return Hk
+
+
+def H3Dsquare_fct(kx,ky,kz,t=1,mu=-1,m=0): 
+    """
+    Simplest 3D square lattice model with ferromagnetism.
+    t: NN hopping 
+    mu: chemical potential
+    m: FM
+    """
+    Hk = np.zeros((2,2,*kx.shape),dtype=complex) #Basis (up,down)
+
+    #set hamiltonian structure
+    Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) - 2*t*cos(kz) - mu
+
+    #make hermitian
+    Hk[1,0] = np.conjugate(Hk[0,1])
+
+    #spin degenerate
+    Hk[1:,1:] = Hk[:1,:1]
+
+    #add magnetization in z direction
+    Hk[0,0] -= m
+    Hk[1,1] += m
+
+    return Hk
+
+
+def H_pAFM_diag_fct(kx,ky,t=1,delta=0.,mu=-1,m=0): 
+    """
+    Minimal model spin-diagonal p-wave AFM. 
+    t: NN hopping
+    delta: unisotropy in p-wave pairing
+    """
+    Hk = np.zeros((2,2,*kx.shape),dtype=complex) #Basis (up,down)
+    #set hamiltonian structure
+    Hk[0,0] = -2*(t+delta)*cos(kx) - 2*t*cos(ky) - mu + delta * (sin(kx) + sin(2*kx + delta))
+    Hk[1,1] = -2*(t+delta)*cos(kx) - 2*t*cos(ky) - mu - delta * (sin(kx) + sin(2*kx - delta))
+
+    return Hk
+
+
+def H_pAFM_fct(kx,ky,t=1,alpha=np.zeros(2),mu=-1,m=0): 
+    """
+    Minimal model for a p-wave AFM. 
+    t: NN hopping
+    d_phase: positive phase shift in x direction of the up spin and phase shift in -x direction of the down spin
+    """
+    Hk = np.zeros((4,4,*kx.shape),dtype=complex) #Basis (up A, up B, down A, down B)
+
+    #set hamiltonian structure
+    Hk[0,0] = -2*t*cos(kx) - 2*t*cos(ky) + alpha[0]*sin(kx) + alpha[1]*sin(ky) - mu
+    Hk[1,1] = -2*t*cos(kx) - 2*t*cos(ky) + alpha[0]*sin(kx) + alpha[1]*sin(ky)- mu
+    Hk[2,2] = -2*t*cos(kx) - 2*t*cos(ky) - alpha[0]*sin(kx) - alpha[1]*sin(ky)- mu
+    Hk[3,3] = -2*t*cos(kx) - 2*t*cos(ky) - alpha[0]*sin(kx) - alpha[1]*sin(ky)- mu
+    #make hermitian
+    Hk[0,2] = Hk[2,0] = -m
+    Hk[1,3] = Hk[3,1] = +m 
 
     return Hk
 

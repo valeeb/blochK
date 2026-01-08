@@ -85,6 +85,6 @@ def extent(Lk_or_kmesh):
     else:
         raise ValueError(f"Invalid input type: {type(Lk_or_kmesh)}. Must be int or meshgrid array.")
     
-    return [xmin, xmax, ymin, ymax]
+    return np.array([xmin, xmax, ymin, ymax])
 
 
