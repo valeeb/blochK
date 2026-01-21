@@ -142,7 +142,12 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=None,N_sa
 
     #if no labels are given, make the labels from the path points
     if labels_points_path is None:
-        labels_points_path = [f'({p[0]:.2f},{p[1]:.2f})' for p in points_path]
+        if len(points_path[0]) ==2:
+            labels_points_path = [f'({p[0]:.2f},{p[1]:.2f})' for p in points_path]
+        elif len(points_path[0]) ==3:
+            labels_points_path = [f'({p[0]:.2f},{p[1]:.2f},{p[2]:.2f})' for p in points_path]
+        else:
+            raise ValueError('points in points_path must be 2D or 3D')
 
     #setting the path
     ts, ks, ticks = path(points_path,N_samples=N_samples)
@@ -151,7 +156,7 @@ def plot_bandstruc(ax,Hamiltonian,points_path=None, labels_points_path=None,N_sa
     cmap = set_colormap(cmap)
     norm = plt.Normalize(0, 1) # Create a continuous norm to map from data points to colors
     
-    es,psis = Hamiltonian.diagonalize(ks[:,0],ks[:,1])
+    es,psis = Hamiltonian.diagonalize(*np.transpose(ks))
 
     #ax.axhline(0,linestyle='--',color='gray',zorder=0)
 
