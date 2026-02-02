@@ -60,6 +60,41 @@ def test_conductivity():
     assert np.allclose(sigma_e[0,0], sigma_e[1,1]), "sigma_xx and sigma_yy should be equal by symmetry for each energy"
     assert np.isclose(sigma_e[:,:,1], sigma).all(), "conductivity with array input or float/integer input should be equal for same energy"
 
+
+def test_conductivity_list_of_operators():
+    H = create_Hsquare()
+    H.set_params(dict(t=1,m=0.4))
+
+    #test 1D operators
+    loo = [np.ones(2), H.operator.spin,H.operator.spin>0]
+
+    sigma = observable.conductivity_list_of_operators(H, list_of_operators=loo, operator_dim=1)
+    assert sigma.shape == (3, 2, 2)
+
+    sigma = observable.conductivity_list_of_operators(H, list_of_operators=loo, operator_dim=1, energy=np.array([-0.1,0,0.1,0.2]))
+    assert sigma.shape == (3, 2, 2, 4)
+
+    #test 2D operators
+    loo = [np.diag(operator) for operator in loo]
+
+    sigma = observable.conductivity_list_of_operators(H, list_of_operators=loo, operator_dim=2)
+    assert sigma.shape == (3, 2, 2)
+
+    sigma = observable.conductivity_list_of_operators(H, list_of_operators=loo, operator_dim=2, energy=np.array([-0.1,0,0.1,0.2]))
+    assert sigma.shape == (3, 2, 2, 4)
+
+
+def test_conductivity_and_conductivity_list_of_operators():
+    H = create_Hsquare()
+    H.set_params(dict(t=1,m=0.4))
+    
+    operators = np.random.rand(3,2)
+    sigmas1 = np.array([observable.conductivity(H, operator=operator) for operator in operators])
+    sigmas2 = observable.conductivity_list_of_operators(H, list_of_operators=operators)
+
+    assert np.isclose(sigmas1, sigmas2).all()
+
+
 def test_conductivity_orbital_resolved():
     H = create_Hsquare()
     H.set_params(dict(t=1,m=0.4))

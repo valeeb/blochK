@@ -2,6 +2,9 @@ import numpy as np
 from numpy import pi,cos,sin,exp
 from blochK.hamiltonian import Hamiltonian2D
 
+import warnings #for deprecation warnings
+    
+
 
 #############################################################################################################################################
 #eigenvalues, eigenstates, and expectation values
@@ -127,7 +130,7 @@ def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,Lk
         localH = Hk.shape[0]
         operator = np.ones(localH) 
     if len(operator.shape)==1: #operator.shape = (localH)
-        jspin = np.einsum('n,inmkq->inmkq',operator,v) #.shape = (2,localH,localH,k,q)
+        jspin = np.einsum('n,inmkq->inmkq',operator,v)/2 +  np.einsum('m,inmkq->inmkq',operator,v)/2 #.shape = (2,localH,localH,k,q)
     else: #operator.shape = (localH,localH)
         jspin = np.einsum('ln,inmkq->ilmkq',operator,v)/2 + np.einsum('inmkq,ml->inlkq',v,operator)/2 #.shape = (2,localH,localH,Lq,Lq) #antisymmetrized version if s,
     
@@ -189,6 +192,15 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
     Returns:
     conductivity tensor .shape=(localH,2,2) (basis of H, n1 direction, n2 direction)
     """
+    #deprecation warning
+    warnings.warn(
+        "conductivity_orbital_resolved is deprecated and will be removed in a future release. \n"
+        "It might give wrong results if velocity operator does not commute with the applied operator. \n"
+        "Use conductivity_list_of_operators instead.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+
     #sampling the BZ
     ks = Hamiltonian.BZ.sample(Lk)
 
@@ -247,6 +259,109 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
         return np.real(sigma)/Lk**2 /np.pi #.shape=(localH,2,2,energy)
 
 
+def conductivity_list_of_operators(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,list_of_operators=None,operator_dim=1,Lk=50,optimize='greedy'):
+    """
+    Evalutes the conductivity with respect to a list/matrix/tensor of operators of Hamiltonian_fct with 'Hparam'. 
+    ------------
+    Parameters:
+    'Hamiltonian_fct': function that returns the Hamiltonian in k-space
+    'Hparam': parameters for the Hamiltonian function
+    'Gamma':  spectral broadening
+    'energy': addtional energy at which the conductivity is evaluated. Default is 0 (Fermi level)
+    'list_of_operators': tensor of operators with respect to which the conductivity is evaluated. Each operator should have shape (localH) or (localH x localH) (specify operator_dim). Default is the identity operator
+    'operator_dim': int 1 or 2. Number of axis which are contracted with conductivity. 1 for diagonal operators, 2 for full operators
+    'Lq': number of k-points in the q-direction
+    'kmesh_BZ': the k-points of the Brillouin zone. If None, square BZ is sampled with 100x100 points
+    'optimize': optimization strategy for the computation, see numpy.einsum documentation, for a new problem use 'find_path' first, and pass it as argument 'optimize' in future calls
+    -----------
+    returns:
+    conductivity tensor 
+    if energy is a float: 
+        .shape=(*list_of_operators.shape[:-operator_dim],2,2)
+    if energy is an array:
+        .shape=(*list_of_operators.shape[:-operator_dim],2,2,len(energy))
+    """
+    #consistency checks
+    if list_of_operators is None: #identity operator if none given
+        localH = Hk.shape[0]
+        list_of_operators = np.ones((1,localH))
+        operator_dim = 1
+    else: 
+        list_of_operators = np.array(list_of_operators)
+        if operator_dim==1:
+            assert list_of_operators.ndim>=2, "list_of_operators must be at least 2-dimensional, with first dimension being the operator index"
+        elif operator_dim==2:
+            assert list_of_operators.ndim>=3, "list_of_operators must be at least 3-dimensional, with first dimension being the operator index"
+        else:
+            raise ValueError("operator_dim must be 1 or 2")
+
+
+    #sampling the BZ
+    ks = Hamiltonian.BZ.sample(Lk)
+
+    #compute the hamiltonian, eigenvalues and eigenstates
+    Hk = Hamiltonian.evaluate(*ks) #.shape = (localH,localH,k,q)
+    es,psi = Hamiltonian.diagonalize(*ks) #.shape=(band,k,q,localH)
+
+    #define broadening if not given
+    if Gamma is None:
+        Gamma = find_Gamma(es)
+
+    #compute the derivatives of Hk along unit vectors of BZ
+    dk = np.linalg.norm(np.abs(ks[:,0,1]-ks[:,0,0]),axis=0) 
+    v1 = -(np.roll(Hk,1,axis=2)-np.roll(Hk,-1,axis=2))/dk/2 #along first axis
+    v2 = -(np.roll(Hk,1,axis=3)-np.roll(Hk,-1,axis=3))/dk/2 #along second axis
+    v = np.array([v1,v2]) #.shape = (2,localH,localH,k,q)
+    
+    #calculate the operator density
+    if operator_dim==1: #operator.shape = (localH)
+        jspin = np.einsum('...n,inmkq->...inmkq',list_of_operators,v)/2 + np.einsum('...m,inmkq->...inmkq',list_of_operators,v)/2 #.shape = (...,2,localH,localH,k,q)
+    else: #operator.shape = (localH,localH)
+        jspin = np.einsum('...ln,inmkq->...ilmkq',list_of_operators,v)/2 + np.einsum('inmkq,...ml->...inlkq',v,list_of_operators)/2 #.shape = (...,2,localH,localH,Lq,Lq) #antisymmetrized version if s,
+    
+    if isinstance(energy,float) or isinstance(energy,int):
+        Greenfct = Gamma/((es-energy)**2+Gamma**2) #.shape = (band,Lq,Lq)
+
+        #compute the product of all these quantities
+        #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
+        if optimize=='path':
+            print('using default path for list_of_operators conductivity, might not be optimal for your problem!')
+            opt_path = ['einsum_path', (0, 6), (1, 5), (1, 5), (0, 4), (1, 2), (0, 2), (0, 1)]
+            sigma = np.einsum('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
+        elif optimize=='find_path': #returns the optimal path, no results!
+            opt_path = np.einsum_path('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
+            print('Optimal contraction path found:',opt_path)
+            return opt_path
+        elif optimize=='greedy':
+            sigma = np.einsum('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
+        elif optimize[0]=='einsum_path': #user defined path
+            sigma = np.einsum('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize)
+        else:
+            sigma = np.einsum('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+        
+        return np.real(sigma)/Lk**2 /np.pi #.shape=(...,2,2)
+    
+    else: #energy is an array
+        assert isinstance(energy,np.ndarray), "energy must be a float or an np.ndarray"
+
+        Greenfct = Gamma/((es[None]-energy[:,None,None,None])**2+ Gamma**2) #.shape = (energy,band,Lq,Lq)
+
+        #compute the product of all these quantities
+        #contracting of many indices might be costly, therefore use preoptimized path or 'greedy'
+        if optimize=='path':
+            opt_path = ['einsum_path', (0, 1), (0, 6), (0, 1), (0, 4), (2, 3), (0, 1, 2)]
+            sigma = np.einsum('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=opt_path)
+        elif optimize=='find_path': #returns the optimal path, no results!
+            opt_path = np.einsum_path('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct, optimize='optimal')[0]
+            print('Optimal contraction path found:',opt_path)
+            return opt_path
+        elif optimize=='greedy':
+            sigma = np.einsum('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy')
+        else:
+            sigma = np.einsum('nkqa,...iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),jspin,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct)
+        
+        return np.real(sigma)/Lk**2 /np.pi #.shape=(...,2,2,energy)
+    
 
 #############################################################################################################################################
 #Computing Quasiparticle Interference (QPI) / Local Density of States (LDOS)
