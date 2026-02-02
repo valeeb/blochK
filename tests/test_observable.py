@@ -65,6 +65,10 @@ def test_conductivity_list_of_operators():
     H = create_Hsquare()
     H.set_params(dict(t=1,m=0.4))
 
+    #test default settings
+    sigma = observable.conductivity_list_of_operators(H)
+    assert sigma.shape == (1, 2, 2), "With default settings, the output should have shape (1,2,2)"
+
     #test 1D operators
     loo = [np.ones(2), H.operator.spin,H.operator.spin>0]
 

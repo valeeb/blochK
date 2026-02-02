@@ -127,7 +127,7 @@ def conductivity(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,operator=None,Lk
     
     #calculate the operator density
     if operator is None: #identity operator if none given
-        localH = Hk.shape[0]
+        localH = Hamiltonian.n_orbitals
         operator = np.ones(localH) 
     if len(operator.shape)==1: #operator.shape = (localH)
         jspin = np.einsum('n,inmkq->inmkq',operator,v)/2 +  np.einsum('m,inmkq->inmkq',operator,v)/2 #.shape = (2,localH,localH,k,q)
@@ -283,7 +283,7 @@ def conductivity_list_of_operators(Hamiltonian: Hamiltonian2D,Gamma=None,energy=
     """
     #consistency checks
     if list_of_operators is None: #identity operator if none given
-        localH = Hk.shape[0]
+        localH = Hamiltonian.n_orbitals
         list_of_operators = np.ones((1,localH))
         operator_dim = 1
     else: 
