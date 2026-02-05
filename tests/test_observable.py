@@ -16,10 +16,10 @@ def test_exp_value_O():
 
     #call O2 check shape
     O2 = observable.exp_value_O(np.diag(H.operator.spin), psi)
-    assert O2.shape == (2, 2, 3)
+    assert O2.shape == (2, 3), "Shape of O2 is 2 bands and 3 k-points"
 
     #check if quadratic and linear version of exp_value_O give the same result
-    assert np.allclose(O1, np.diagonal(np.real(O2)).T)
+    assert np.allclose(O1, O2)
 
 
 def test_isDegenerateIn():
