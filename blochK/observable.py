@@ -1,4 +1,5 @@
 import numpy as np
+import jax.numpy as jnp
 from numpy import pi,cos,sin,exp
 from blochK.hamiltonian import Hamiltonian2D
 
@@ -265,8 +266,6 @@ def conductivity_orbital_resolved(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0
         return np.real(sigma)/Lk**2 /np.pi #.shape=(localH,2,2,energy)
 
 
-from time import time
-
 def conductivity_list_of_operators(Hamiltonian: Hamiltonian2D,Gamma=None,energy=0,list_of_operators=None,operator_dim=1,Lk=50,optimize='greedy'):
     """
     Evalutes the conductivity with respect to a list/matrix/tensor of operators of Hamiltonian_fct with 'Hparam'. 
@@ -353,29 +352,29 @@ def conductivity_list_of_operators(Hamiltonian: Hamiltonian2D,Gamma=None,energy=
         #Dumb non-optimized version
         elif optimize=='greedy':
             if operator_dim==1: #operator.shape = (localH)
-                sigma1 = np.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
-                sigma2 = np.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
             else: #operator.shape = (localH,localH)
-                sigma1 = np.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
-                sigma2 = np.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
 
         #user defined path
         elif optimize[0][0]=='einsum_path': #user defined path
             if operator_dim==1: #operator.shape = (localH)
-                sigma1 = np.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
             else: #operator.shape = (localH,localH)
-                sigma1 = np.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
 
         #default einssum version, no optimization
         else:
             if operator_dim==1: #operator.shape = (localH)
-                sigma1 = np.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
             else: #operator.shape = (localH,localH)
-                sigma1 = np.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,nkq,mkq->...ij',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
         
         sigma = (sigma1 + sigma2)/2
         return np.real(sigma)/Lk**2 /np.pi #.shape=(...,2,2)
@@ -393,11 +392,11 @@ def conductivity_list_of_operators(Hamiltonian: Hamiltonian2D,Gamma=None,energy=
         #returns the optimal path, no results!
         if optimize=='find_path': 
             if operator_dim==1: #operator.shape = (localH)
-                opt_path1 = np.einsum_path('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = O * v
-                opt_path2 = np.einsum_path('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = v * O
+                opt_path1 = jnp.einsum_path('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = O * v
+                opt_path2 = jnp.einsum_path('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = v * O
             else: #operator.shape = (localH,localH)
-                opt_path1 = np.einsum_path('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = O * v
-                opt_path2 = np.einsum_path('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = v * O
+                opt_path1 = jnp.einsum_path('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = O * v
+                opt_path2 = jnp.einsum_path('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='optimal')[0] # jspin = v * O
             print('Optimal contraction path found [sigma1, sigma2]:')
             print([opt_path1,opt_path2])
             
@@ -406,29 +405,29 @@ def conductivity_list_of_operators(Hamiltonian: Hamiltonian2D,Gamma=None,energy=
         #Dumb non-optimized version
         elif optimize=='greedy':
             if operator_dim==1: #operator.shape = (localH)
-                sigma1 = np.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
-                sigma2 = np.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
             else: #operator.shape = (localH,localH)
-                sigma1 = np.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
-                sigma2 = np.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize='greedy') # jspin = v * O
 
         #user defined path
         elif optimize[0][0]=='einsum_path': #user defined path
             if operator_dim==1: #operator.shape = (localH)
-                sigma1 = np.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
             else: #operator.shape = (localH,localH)
-                sigma1 = np.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[0]) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct,optimize=optimize[1]) # jspin = v * O
 
         #default einssum version, no optimization
         else:
             if operator_dim==1: #operator.shape = (localH)
-                sigma1 = np.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...a,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...b,iabkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
             else: #operator.shape = (localH,localH)
-                sigma1 = np.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
-                sigma2 = np.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
+                sigma1 = jnp.einsum('nkqa,...af,ifbkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = O * v
+                sigma2 = jnp.einsum('nkqa,...fb,iafkq,mkqb,mkqc,jcdkq,nkqd,enkq,emkq->...ije',np.conjugate(psi),list_of_operators,v,psi,np.conjugate(psi),v,psi,Greenfct,Greenfct) # jspin = v * O
         
         sigma = (sigma1 + sigma2)/2
         return np.real(sigma)/Lk**2 /np.pi #.shape=(...,2,2,energy)
