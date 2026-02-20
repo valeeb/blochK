@@ -1,5 +1,6 @@
 from blochK.plotting.plotting import plot_FS,plot_bandstruc
 from blochK.hamiltonian_testing import create_Hsquare
+from blochK.observable import exp_value_O
 from matplotlib import pyplot as plt
 
 
@@ -7,13 +8,19 @@ def test_plot_FS():
     Hsquare = create_Hsquare()
     Hsquare.set_params(dict(m=0.5)) #set parameters of Hamiltonian
 
-    fig,axs = plt.subplots(1,2, figsize=(6,3))
+    fig,axs = plt.subplots(1,3, figsize=(9,3))
 
     axs[0].set_title('Fermi Surface uncolored')
     plot_FS(axs[0], Hsquare, Lk=5, coloring_operator='k')
 
     axs[1].set_title('Fermi Surface colored by spin')
     plot_FS(axs[1], Hsquare, Lk=5, coloring_operator=Hsquare.operator.spin,cmap='bwr',show_ylabel=False)
+
+    axs[2].set_title('Fermi Surface colored by function')
+    f = lambda es,psis: exp_value_O(Hsquare.operator.spin,psis)
+    plot_FS(axs[2], Hsquare, Lk=5, coloring_operator=f,cmap='bwr',show_ylabel=False)
+
+
 
 
 def test_plot_bandstruc():

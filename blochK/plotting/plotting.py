@@ -32,7 +32,7 @@ def set_colormap(cmap,default_cmap='brg'):
     
 
 
-def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square',threshold_degeneracy:int=3):
+def plot_FS(ax,Hamiltonian, Lk=100, coloring_operator='k',show_xlabel=True,show_ylabel=True,show_FS=True,cmap='none',print_filling=False,kmesh='square',threshold_degeneracy:int=3):
     """
     Plots Fermi surface of Hamiltonian on ax
     Parameters:
@@ -40,7 +40,9 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
     Hamiltonian: Hamiltonian2D object
     Lk: number of k points along each direction. Mutually exclusive with np.ndarray form of kmesh
     kmesh: 'square' (default) or 'BZ' or np.ndarray of shape (2,Lkx,Lky) with kx,ky points
-    coloring operator: a color (fixed color of all bands) or an operator (colored by eigenvalues), i..e. ndarraty of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
+    coloring operator:  1) str : a color (fixed color of all bands)
+                        2) ndarray : an operator (colored by eigenvalues), i..e. ndarray of shape (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or (Hamiltonian.n_orbitals,)
+                        3) callable : a function: (es, psis) -> array of shape = es.shape with values in [-1,1] to be colored by the colormap
     threshold_degeneracy: threshold to consider two eigenvalues as degenerate for coloring purposes (this is the -log10 of the threshold, i.e. threshold=3 means 0.001)
     """
     #check coloring operator
@@ -48,6 +50,10 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
         assert isinstance(coloring_operator,str), 'coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian'
     elif isinstance(coloring_operator,np.ndarray):
         assert coloring_operator.shape == (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or coloring_operator.shape == (Hamiltonian.n_orbitals,), 'coloring operator must be an operator (ndarray) with shape matching the Hamiltonian'
+    elif callable(coloring_operator):
+        es_test = np.zeros((Hamiltonian.n_orbitals,3)) #dummy es
+        psis_test = np.zeros((Hamiltonian.n_orbitals,3,Hamiltonian.n_orbitals))
+        assert coloring_operator(es_test,psis_test).shape == es_test.shape, 'coloring operator must be a callable function returning an array of shape = es.shape'
     else:
         raise ValueError('coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian')
     
@@ -96,18 +102,26 @@ def plot_FS(ax,Hamiltonian, Lk=200, coloring_operator='k',show_xlabel=True,show_
         for iband in range(len(es)): #for each band
             if isinstance(coloring_operator,str): #if coloring operator is a color
                 ax.contour(xs,ys,es[iband],[0],colors=coloring_operator)
-            else: #if coloring operator is an operator
+            else: #if coloring operator is an operator or a callable
                 FS0 = ax.contour(xs,ys,es[iband],[0],alpha=0)
                 for datapoints in FS0.allsegs[0]:
                     if datapoints.shape[0]>2:
                         points = datapoints.reshape(-1, 1, 2)
                         segments = np.concatenate([points[:-1], points[1:]], axis=1) #create a list of N-1 lines form v0 to v1, from v1 to v2,...
                         es_FS,psis_FS = Hamiltonian.diagonalize(datapoints[:,0],datapoints[:,1]) #determine es, psis along contour
-                        Os = exp_value_O(coloring_operator,psis_FS)
-                        isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy)
+                        
+                        if isinstance(coloring_operator,np.ndarray): #if coloring operator is an operator
+                            Os = exp_value_O(coloring_operator,psis_FS)
+                            isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy)
+                        elif callable(coloring_operator): #if coloring operator is a callable
+                            #to implement: make the coloring operator a function of (es,psis) that returns an array of shape es with values in [-1,1] to be colored by the colormap
+                            Os = coloring_operator(es_FS,psis_FS)
+                            isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy)
+                        else:
+                            raise ValueError('coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian or a callable function')
+                        
                         lc = LineCollection(segments,cmap=cmap,norm=norm, capstyle='projecting')
-
-                        normalized_color = (1-1e-10)*(Os[iband]+1)/2 + 1e-15 - 10*isDeg[iband] # shift regular values from interval [0,1] to (0,1) by infinitesimals, make degnerate entries negative
+                        normalized_color = (1-1e-10)*(Os[iband]+1)/2 - 10*isDeg[iband] # shift regular values from interval [0,1] to (0,1) by infinitesimals, make degnerate entries negative
 
                         lc.set_array(normalized_color) #Set the values used for colormapping
                         line = ax.add_collection(lc)
