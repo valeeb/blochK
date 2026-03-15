@@ -112,11 +112,11 @@ def plot_FS(ax,Hamiltonian, Lk=100, coloring_operator='k',show_xlabel=True,show_
                         
                         if isinstance(coloring_operator,np.ndarray): #if coloring operator is an operator
                             Os = exp_value_O(coloring_operator,psis_FS)
-                            isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy)
+                            isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy) # * False
                         elif callable(coloring_operator): #if coloring operator is a callable
                             #to implement: make the coloring operator a function of (es,psis) that returns an array of shape es with values in [-1,1] to be colored by the colormap
                             Os = coloring_operator(es_FS,psis_FS)
-                            isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy)
+                            isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy) # * False
                         else:
                             raise ValueError('coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian or a callable function')
                         
