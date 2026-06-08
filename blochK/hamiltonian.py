@@ -90,6 +90,48 @@ class Hamiltonian2D:
         Hk = self.evaluate(kx, ky)  # shape (n_orbitals, n_orbitals, *kx.shape)
         Hk_dag = np.conjugate(np.swapaxes(Hk, 0, 1))  # Hermitian conjugate
         return np.allclose(Hk, Hk_dag)
+    
+
+    def __add__(self, other):
+        """Add two Hamiltonians together. The resulting Hamiltonian_func is the sum of the two Hamiltonian_funcs. The parameters and operators are merged. If there are overlapping parameter or operator names, the ones from the self Hamiltonian will overwrite the other.
+        Use with caution, as this can lead to unexpected results if the two Hamiltonians have different parameter or operator names that are not intended to be merged.
+        """
+
+        if not isinstance(other, Hamiltonian2D):
+            raise ValueError("Can only add another Hamiltonian2D object")
+        
+        if self.n_orbitals != other.n_orbitals:
+            raise ValueError("Incompatible Hamiltonian dimensions")
+
+        # Define new Hamiltonian_func as sum of the two
+        def new_Hamiltonian_func(kx, ky, **param):
+            return self.evaluate(kx, ky, param) + other.evaluate(kx, ky, param)
+        
+        # Merge parameters and operators
+        new_param = self.param.copy()
+        new_param.update(other.param)
+        
+        new_hamiltonian = Hamiltonian2D(new_Hamiltonian_func, n1=self.n1, n2=self.n2, param=new_param, basis=self.basis, basis_states=self.basis_states)
+        
+        # Merge operators
+        for name in set(self.operator.__dict__.keys()).union(set(other.operator.__dict__.keys())):
+            if hasattr(self.operator, name) and hasattr(other.operator, name):
+                # If both have the same operator name, we can choose to add them or overwrite. Here we choose to add.
+                new_operator = self.operator.__dict__.get(name, 0) + other.operator.__dict__.get(name, 0)
+            else:
+                # If only one has the operator, take that one
+                new_operator = self.operator.__dict__.get(name) or other.operator.__dict__.get(name)
+            new_hamiltonian.add_operator(name, new_operator)
+
+        # Merge suboperators in the same way
+        for name in set(self.suboperator.__dict__.keys()).union(set(other.suboperator.__dict__.keys())):
+            if hasattr(self.suboperator, name) and hasattr(other.suboperator, name):
+                new_suboperator = self.suboperator.__dict__.get(name, 0) + other.suboperator.__dict__.get(name, 0)
+            else:
+                new_suboperator = self.suboperator.__dict__.get(name) or other.suboperator.__dict__.get(name)
+            new_hamiltonian.add_suboperator(name, new_suboperator)
+
+        return new_hamiltonian
 
 
     def diagonalize(self, kx, ky, override_params={}):

@@ -100,6 +100,23 @@ def test_evaluate_Hamiltonian3D():
     assert Hk.shape == (H.n_orbitals, H.n_orbitals, *kx.shape), "Hamiltonian not correctly evaluated"
 
 
+def test_add_Hamiltonian2D():
+    H1 = Hamiltonian2D(Hsquare_fct)
+    H2 = Hamiltonian2D(Hsquare_fct)
+
+    Hsum = H1 + H2
+
+    kx = np.array([[1.2,0.5],[0.1,0.3]])
+    ky = np.array([[2,3],[0.1,0.2]])
+
+    H1k = H1.evaluate(kx, ky)
+    H2k = H2.evaluate(kx, ky)
+    Hsumk = Hsum.evaluate(kx, ky)
+
+    assert Hsumk.shape == H1k.shape, "Summed Hamiltonian has wrong shape"
+    assert np.allclose(Hsumk, H1k + H2k), "Hamiltonian addition does not match elementwise sum"
+
+
 def test_diagonalize_Hamiltonian3D():
     H = Hamiltonian3D(H3Dsquare_fct)
     kx = np.array([1.2,0.5])
