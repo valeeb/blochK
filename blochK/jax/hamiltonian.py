@@ -1,0 +1,489 @@
+import numpy as np
+import jax
+import jax.numpy as jnp
+from types import SimpleNamespace #for operators of Hamiltonian
+import scipy
+
+jax.config.update("jax_enable_x64", True)
+
+
+def _asarray(value):
+    return jnp.asarray(value)
+
+
+class Hamiltonian2D:
+    def __init__(self, Hamiltonian_func, n1=np.array([1,0]),n2=np.array([0,1]), basis=None, basis_states=None,param={}):
+
+        assert callable(Hamiltonian_func), "Hamiltonian_func must be a callable function"
+        Hk = _asarray(Hamiltonian_func(jnp.array([0]),jnp.array([0])))
+        assert Hk.ndim == 3, "Hamiltonian_func must return a 3D array"
+        assert Hk.shape[0] == Hk.shape[1], "Hamiltonian_func must return a square matrix for each k-point"
+        assert Hk.shape[2] == 1, "Hamiltonian_func must return a 3D array with last dimensions equal to kx.shape"
+        
+        self.Hamiltonian_func = Hamiltonian_func  # the function defining H
+        self.n_orbitals = _asarray(Hamiltonian_func(jnp.array([0]),jnp.array([0]),**param)).shape[0]  # number of orbitals (size of H)
+        self.param = param  # parameters of Hamiltonian_func (e.g., hopping strengths)
+        self.n1 = n1  # lattice vector 1
+        self.n2 = n2  # lattice vector 2
+
+        #Further consistency checks
+        assert self.check_hermiticity(jnp.array([1.3,-0.5]),jnp.array([0.2,2.])), "Hamiltonian_func is not Hermitian"
+        
+        #define corresponding Brillouin zone
+        n1_3D = jnp.array([n1[0], n1[1], 0])
+        n2_3D = jnp.array([n2[0], n2[1], 0])
+        zunit = jnp.array([0,0,1])
+        self.BZ = BrillouinZone2D(m1=2*jnp.pi*jnp.cross(zunit,n2_3D)[:2]/jnp.vdot(n1_3D,jnp.cross(zunit,n2_3D)), m2=2*jnp.pi*jnp.cross(zunit,n1_3D)[:2]/jnp.vdot(n2_3D,jnp.cross(zunit,n1_3D)))  # Brillouin zone object
+
+        # Define basis
+        self.basis = None  # basis [spin, sublattice, orbital, ...]
+        self.basis_states = None  # names of basis states ['up','down',...
+        self.operator = SimpleNamespace()  # operators acting on basis states (e.g., spin and sublattice Pauli matrices)
+        self.suboperator = SimpleNamespace()  # operators acting on part of basis states
+
+
+    def set_params(self, kwargs):
+        """set parameters of Hamiltonian_func"""
+        self.param = kwargs
+
+
+    def update_params(self, kwargs):
+        """set parameters of Hamiltonian_func"""
+        self.param.update(kwargs)
+
+    
+    def add_operator(self, name: str, operator: np.ndarray):
+        """Add operator acting on basis states
+        Parameters:
+        name: str
+            Name of the operator (e.g., 'spin', 'sublattice')
+        operator: np.ndarray
+            Operator matrix of shape (n_orbitals, n_orbitals) or (n_orbitals,)
+        """
+        operator = _asarray(operator)
+        if operator.shape != (self.n_orbitals, self.n_orbitals) and operator.shape != (self.n_orbitals,):
+            raise ValueError(f"Operator must be of shape ({self.n_orbitals}, {self.n_orbitals}) or ({self.n_orbitals},)")
+        self.operator.__setattr__(name, operator)
+
+
+    def add_suboperator(self, name: str, operator: np.ndarray):
+        """Add operator acting on part of basis states
+        Parameters:
+        name: str
+            Name of the operator (e.g., 'spin', 'sublattice')
+        operator: np.ndarray
+            Operator matrix of shape (<n_orbitals, <n_orbitals) or (<n_orbitals,)
+        """
+        self.suboperator.__setattr__(name, operator)
+
+
+    def evaluate(self, kx, ky, override_params={}):
+        """Evaluate Hamiltonian at (kx,ky) with optional parameter overrides
+        Parameters:
+        kx, ky: np.ndarray
+        override_params: dict
+        Returns:
+        Hk: np.ndarray of shape (n_orbitals, n_orbitals, *kx.shape)
+        """
+
+        # Merge object params and any overrides
+        param = self.param.copy()
+        param.update(override_params)
+        return _asarray(self.Hamiltonian_func(_asarray(kx), _asarray(ky), **param))
+    
+
+    def check_hermiticity(self, kx, ky):
+        """Check if Hamiltonian_fct is Hermitian at (kx,ky)"""
+        Hk = self.evaluate(kx, ky)  # shape (n_orbitals, n_orbitals, *kx.shape)
+        Hk_dag = jnp.conjugate(jnp.swapaxes(Hk, 0, 1))  # Hermitian conjugate
+        return bool(jnp.allclose(Hk, Hk_dag))
+    
+
+    def __add__(self, other):
+        """Add two Hamiltonians together. The resulting Hamiltonian_func is the sum of the two Hamiltonian_funcs. The parameters and operators are merged. If there are overlapping parameter or operator names, the ones from the self Hamiltonian will overwrite the other.
+        Use with caution, as this can lead to unexpected results if the two Hamiltonians have different parameter or operator names that are not intended to be merged.
+        """
+
+        if not isinstance(other, Hamiltonian2D):
+            raise ValueError("Can only add another Hamiltonian2D object")
+        
+        if self.n_orbitals != other.n_orbitals:
+            raise ValueError("Incompatible Hamiltonian dimensions")
+
+        # Define new Hamiltonian_func as sum of the two
+        def new_Hamiltonian_func(kx, ky, **param):
+            return self.evaluate(kx, ky, param) + other.evaluate(kx, ky, param)
+        
+        # Merge parameters and operators
+        new_param = self.param.copy()
+        new_param.update(other.param)
+        
+        new_hamiltonian = Hamiltonian2D(new_Hamiltonian_func, n1=self.n1, n2=self.n2, param=new_param, basis=self.basis, basis_states=self.basis_states)
+        
+        # Merge operators
+        for name in set(self.operator.__dict__.keys()).union(set(other.operator.__dict__.keys())):
+            if hasattr(self.operator, name) and hasattr(other.operator, name):
+                # If both have the same operator name, we can choose to add them or overwrite. Here we choose to add.
+                new_operator = self.operator.__dict__.get(name, 0) + other.operator.__dict__.get(name, 0)
+            else:
+                # If only one has the operator, take that one
+                new_operator = self.operator.__dict__.get(name) or other.operator.__dict__.get(name)
+            new_hamiltonian.add_operator(name, new_operator)
+
+        # Merge suboperators in the same way
+        for name in set(self.suboperator.__dict__.keys()).union(set(other.suboperator.__dict__.keys())):
+            if hasattr(self.suboperator, name) and hasattr(other.suboperator, name):
+                new_suboperator = self.suboperator.__dict__.get(name, 0) + other.suboperator.__dict__.get(name, 0)
+            else:
+                new_suboperator = self.suboperator.__dict__.get(name) or other.suboperator.__dict__.get(name)
+            new_hamiltonian.add_suboperator(name, new_suboperator)
+
+        return new_hamiltonian
+
+
+    def diagonalize(self, kx, ky, override_params={}):
+        """Diagonalize Hamiltonian at (kx,ky) with optional parameter overrides
+        Parameters:
+        kx, ky: np.ndarray
+        override_params: dict
+        Returns:
+        es: np.ndarray of shape (bands=n_orbitals, *kx.shape)
+            Eigenvalues at each k-point
+        psis: np.ndarray of shape (bands=n_orbitals, *kx.shape,n_orbitals)
+            Eigenvectors at each k-point
+        """
+        Hk = self.evaluate(kx, ky, override_params)  # shape (n_orbitals, n_orbitals, *kx.shape)
+        Hk = jnp.moveaxis(jnp.moveaxis(Hk,1,-1),0,-2) #make it ...x n_orbitals x n_orbitals dimensional
+        es,vs = jnp.linalg.eigh(Hk)
+        es = jnp.moveaxis(es,-1,0) #.shape=band x kys (x kxs)
+        psi = jnp.moveaxis(vs,-1,0) #.shape=band x kys (x kxs) x n_orbitals
+
+        return es, psi
+
+    
+
+
+class BrillouinZone2D:
+    def __init__(self, m1= np.array([2*np.pi,0]), m2: np.ndarray = np.array([0,2*np.pi])):
+        self.m1 = _asarray(m1)
+        self.m2 = _asarray(m2)
+        self.set_points(dict())
+        self.area = jnp.abs(self.m1[0]*self.m2[1] - self.m1[1]*self.m2[0])
+
+
+    def sample(self,Lk:int,oversample_edge:bool=False):
+        """Sample the Brillouin zone on a Lk x Lk grid
+        Parameters:
+        Lk: int
+            Number of k-points along each direction
+        oversample_edge: bool
+            If True, sample 1 point more along each direction. The true BZ is then ks[:,1:-1,1:-1].
+            Useful for observables which involve |u_n(k)> and |u_n(k+dk)> if the Hamiltonian is gauge dependent. 
+        Returns:
+        ks: np.ndarray of shape (2, Lk, Lk)
+            Sampled k-points in the Brillouin zone
+        """
+        epsilon = 1/Lk #ensures that the edge is not sampled twice
+        if oversample_edge:
+            idxs =jnp.linspace(-1-epsilon,1+epsilon,Lk+2)/2
+        else:
+            idxs =jnp.linspace(-1+epsilon,1-epsilon,Lk)/2
+        ks = jnp.stack(jnp.meshgrid(idxs, idxs, indexing='ij'))
+        #i*m_1 + j*m_2
+        ks = jnp.einsum('ij,ixy->jxy',jnp.stack([self.m1, self.m2]),ks)
+        return ks
+    
+
+    def set_points(self, additional_points: dict, include_default_points=True):
+        """Set high-symmetry points in the Brillouin zone"""
+        default_points = {
+            r'\Gamma': jnp.array([0,0]),
+            'X': self.m1/2,
+            'Y': self.m2/2,
+            '-X': -self.m1/2,
+            '-Y': -self.m2/2,
+            'M': (self.m1+self.m2)/4,
+            '-M': -(self.m1+self.m2)/4,
+            "M'": (self.m1-self.m2)/4,
+            "-M'": -(self.m1-self.m2)/4,
+            'R': (self.m1+self.m2)/2,
+            '-R': -(self.m1+self.m2)/2,
+            "R'": (self.m1-self.m2)/2,
+            "-R'": -(self.m1-self.m2)/2,
+        }
+        if include_default_points:
+            self.points = dict(**default_points, **additional_points)
+        else:
+            self.points = additional_points 
+
+
+    def return_boundary(self, periodic=False,true_BZ=True):
+        """
+        Compute vertices of the 1st Brillouin zone from reciprocal lattice vectors.
+        Parameters
+        ----------
+        periodic : bool, optional
+            If True, the polygon is closed by repeating the first vertex at the end. Default is False.
+        true_BZ : bool, optional
+            If True, compute the Wigner-Seitz cell of the reciprocal lattice. If False, compute the span spanned by b1 and b2. Default is True.
+        Returns
+        -------
+        vertices : ndarray, shape (N, 2)
+            Ordered vertices of the Brillouin zone polygon.
+        """
+
+        if true_BZ: 
+            # generate reciprocal lattice points around origin
+            grid_range = range(-2, 3)   # 5x5 neighborhood
+            points = [m*self.m1 + n*self.m2 for m in grid_range for n in grid_range]
+            points = np.array(points)
+            
+            # Voronoi diagram
+            vor = scipy.spatial.Voronoi(points)
+            
+            # index of the origin
+            origin_index = np.argmin(np.linalg.norm(points, axis=1))
+            
+            # region around the origin
+            region_index = vor.point_region[origin_index]
+            region = vor.regions[region_index]
+            
+            # vertices of BZ polygon
+            vertices = vor.vertices[region]
+            
+            # order them counterclockwise
+            center = vertices.mean(axis=0)
+            angles = np.arctan2(vertices[:,1]-center[1], vertices[:,0]-center[0])
+            vertices = vertices[np.argsort(angles)]
+        else:# span spanned by m1 and m2
+            vertices = np.array([np.zeros_like(self.m1), self.m1, self.m1 + self.m2, self.m2]) - (self.m1 + self.m2)/2
+
+        
+        if periodic:
+            # Ensure the polygon is closed by repeating the first vertex at the end
+            vertices = np.vstack([vertices, vertices[0]])
+            
+        return vertices
+
+
+
+
+class Hamiltonian3D:
+    def __init__(self, Hamiltonian_func, n1=np.array([1,0,0]),n2=np.array([0,1,0]),n3=np.array([0,0,1]), basis=None, basis_states=None,param={}):
+
+        assert callable(Hamiltonian_func), "Hamiltonian_func must be a callable function"
+        Hk = _asarray(Hamiltonian_func(jnp.array([0]),jnp.array([0]),jnp.array([0])))
+        assert Hk.ndim == 3, "Hamiltonian_func must return a 3D array"
+        assert Hk.shape[0] == Hk.shape[1], "Hamiltonian_func must return a square matrix for each k-point"
+        assert Hk.shape[2] == 1, "Hamiltonian_func must return a 3D array with last dimensions equal to kx.shape"
+        
+        self.Hamiltonian_func = Hamiltonian_func  # the function defining H
+        self.n_orbitals = _asarray(Hamiltonian_func(jnp.array([0]),jnp.array([0]),jnp.array([0]),**param)).shape[0]  # number of orbitals (size of H)
+        self.param = param  # parameters of Hamiltonian_func (e.g., hopping strengths)
+        self.n1 = n1  # lattice vector 1
+        self.n2 = n2  # lattice vector 2
+        self.n3 = n3  # lattice vector 3
+
+        #Further consistency checks
+        assert self.check_hermiticity(jnp.array([1.3,-0.5]),jnp.array([0.2,2.]),jnp.array([0.1,0.3])), "Hamiltonian_func is not Hermitian"
+        
+        #define corresponding Brillouin zone
+        volume = jnp.vdot(n1, jnp.cross(n2, n3))  # scalar triple product
+        m1 = 2 * jnp.pi * jnp.cross(n2, n3) / volume
+        m2 = 2 * jnp.pi * jnp.cross(n3, n1) / volume
+        m3 = 2 * jnp.pi * jnp.cross(n1, n2) / volume
+        self.BZ = BrillouinZone3D(m1=m1, m2=m2, m3=m3)
+
+        # Define basis
+        self.basis = None  # basis [spin, sublattice, orbital, ...]
+        self.basis_states = None  # names of basis states ['up','down',...
+        self.operator = SimpleNamespace()  # operators acting on basis states (e.g., spin and sublattice Pauli matrices)
+        self.suboperator = SimpleNamespace()  # operators acting on part of basis states
+
+
+    def set_params(self, kwargs):
+        """set parameters of Hamiltonian_func"""
+        self.param = kwargs
+
+
+    def update_params(self, kwargs):
+        """set parameters of Hamiltonian_func"""
+        self.param.update(kwargs)
+
+    
+    def add_operator(self, name: str, operator: np.ndarray):
+        """Add operator acting on basis states
+        Parameters:
+        name: str
+            Name of the operator (e.g., 'spin', 'sublattice')
+        operator: np.ndarray
+            Operator matrix of shape (n_orbitals, n_orbitals) or (n_orbitals,)
+        """
+        operator = _asarray(operator)
+        if operator.shape != (self.n_orbitals, self.n_orbitals) and operator.shape != (self.n_orbitals,):
+            raise ValueError(f"Operator must be of shape ({self.n_orbitals}, {self.n_orbitals}) or ({self.n_orbitals},)")
+        self.operator.__setattr__(name, operator)
+
+
+    def add_suboperator(self, name: str, operator: np.ndarray):
+        """Add operator acting on part of basis states
+        Parameters:
+        name: str
+            Name of the operator (e.g., 'spin', 'sublattice')
+        operator: np.ndarray
+            Operator matrix of shape (<n_orbitals, <n_orbitals) or (<n_orbitals,)
+        """
+        self.suboperator.__setattr__(name, operator)
+
+
+    def evaluate(self, kx, ky, kz, override_params={}):
+        """Evaluate Hamiltonian at (kx,ky) with optional parameter overrides
+        Parameters:
+        kx, ky: np.ndarray
+        override_params: dict
+        Returns:
+        Hk: np.ndarray of shape (n_orbitals, n_orbitals, *kx.shape)
+        """
+
+        # Merge object params and any overrides
+        param = self.param.copy()
+        param.update(override_params)
+        return _asarray(self.Hamiltonian_func(_asarray(kx), _asarray(ky), _asarray(kz), **param))
+    
+
+    def check_hermiticity(self, kx, ky, kz):
+        """Check if Hamiltonian_fct is Hermitian at (kx,ky)"""
+        Hk = self.evaluate(kx, ky, kz)  # shape (n_orbitals, n_orbitals, *kx.shape)
+        Hk_dag = jnp.conjugate(jnp.swapaxes(Hk, 0, 1))  # Hermitian conjugate
+        return bool(jnp.allclose(Hk, Hk_dag))
+
+
+    def diagonalize(self, kx, ky, kz, override_params={}):
+        """Diagonalize Hamiltonian at (kx,ky) with optional parameter overrides
+        Parameters:
+        kx, ky: np.ndarray
+        override_params: dict
+        Returns:
+        es: np.ndarray of shape (bands=n_orbitals, *kx.shape)
+            Eigenvalues at each k-point
+        psis: np.ndarray of shape (bands=n_orbitals, *kx.shape,n_orbitals)
+            Eigenvectors at each k-point
+        """
+        Hk = self.evaluate(kx, ky, kz, override_params)  # shape (n_orbitals, n_orbitals, *kx.shape)
+        Hk = jnp.moveaxis(jnp.moveaxis(Hk,1,-1),0,-2) #make it ...x n_orbitals x n_orbitals dimensional
+        es,vs = jnp.linalg.eigh(Hk)
+        es = jnp.moveaxis(es,-1,0) #.shape=band x kys (x kxs)
+        psi = jnp.moveaxis(vs,-1,0) #.shape=band x kys (x kxs) x n_orbitals
+
+        return es, psi
+
+    
+
+
+class BrillouinZone3D:
+    def __init__(self, m1= np.array([2*np.pi,0,0]), m2: np.ndarray = np.array([0,2*np.pi,0]), m3: np.ndarray = np.array([0,0,2*np.pi])):
+        self.m1 = _asarray(m1)
+        self.m2 = _asarray(m2)
+        self.m3 = _asarray(m3)
+        self.set_points(dict())
+        self.volume = jnp.abs(jnp.dot(self.m1, jnp.cross(self.m2, self.m3)))
+
+
+    def sample(self,Lk:int,oversample_edge:bool=False):
+        """Sample the Brillouin zone on a Lk x Lk x Lk grid
+        Parameters:
+        Lk: int
+            Number of k-points along each direction
+        oversample_edge: bool
+            If True, sample 1 point more along each direction. The true BZ is then ks[:,1:-1,1:-1].
+            Useful for observables which involve |u_n(k)> and |u_n(k+dk)> if the Hamiltonian is gauge dependent. 
+        Returns:
+        ks: np.ndarray of shape (3, Lk, Lk, Lk)
+            Sampled k-points in the Brillouin zone
+        """
+        epsilon = 1/Lk #ensures that the edge is not sampled twice
+        if oversample_edge:
+            idxs =jnp.linspace(-1-epsilon,1+epsilon,Lk+2)/2
+        else:
+            idxs =jnp.linspace(-1+epsilon,1-epsilon,Lk)/2
+        ks = jnp.stack(jnp.meshgrid(idxs, idxs, idxs, indexing='ij'))
+        #i*m_1 + j*m_2 + k*m_3
+        ks = jnp.einsum('ij,ixyz->jxyz',jnp.stack([self.m1, self.m2, self.m3]),ks)
+        return ks
+    
+
+    def set_points(self, additional_points: dict, include_default_points=True):
+        """Set high-symmetry points in the Brillouin zone"""
+        default_points = {
+            r'\Gamma': np.array([0, 0, 0]),
+            # Face centers
+            'X':  self.m1 / 2,
+            'Y':  self.m2 / 2,
+            'Z':  self.m3 / 2,
+            '-X': -self.m1 / 2,
+            '-Y': -self.m2 / 2,
+            '-Z': -self.m3 / 2,
+            # Edge centers
+            'M':  (self.m1 + self.m2) / 2,
+            'N':  (self.m1 + self.m3) / 2,
+            'P':  (self.m2 + self.m3) / 2,
+            '-M': -(self.m1 + self.m2) / 2,
+            '-N': -(self.m1 + self.m3) / 2,
+            '-P': -(self.m2 + self.m3) / 2,
+            # Body corner
+            'R':  (self.m1 + self.m2 + self.m3) / 2,
+            '-R': -(self.m1 + self.m2 + self.m3) / 2,
+        }
+        if include_default_points:
+            self.points = dict(**default_points, **additional_points)
+        else:
+            self.points = additional_points 
+
+
+    # def return_boundary(self, periodic=False,true_BZ=True):
+    #     """
+    #     Compute vertices of the 1st Brillouin zone from reciprocal lattice vectors.
+    #     Parameters
+    #     ----------
+    #     periodic : bool, optional
+    #         If True, the polygon is closed by repeating the first vertex at the end. Default is False.
+    #     true_BZ : bool, optional
+    #         If True, compute the Wigner-Seitz cell of the reciprocal lattice. If False, compute the span spanned by b1 and b2. Default is True.
+    #     Returns
+    #     -------
+    #     vertices : ndarray, shape (N, 2)
+    #         Ordered vertices of the Brillouin zone polygon.
+    #     """
+
+    #     if true_BZ: 
+    #         # generate reciprocal lattice points around origin
+    #         grid_range = range(-2, 3)   # 5x5x5 neighborhood
+    #         points = [m*self.m1 + n*self.m2 + p*self.m3 for m in grid_range for n in grid_range for p in grid_range]
+    #         points = np.array(points)
+            
+    #         # Voronoi diagram
+    #         vor = scipy.spatial.Voronoi(points)
+            
+    #         # index of the origin
+    #         origin_index = np.argmin(np.linalg.norm(points, axis=1))
+            
+    #         # region around the origin
+    #         region_index = vor.point_region[origin_index]
+    #         region = vor.regions[region_index]
+            
+    #         # vertices of BZ polygon
+    #         vertices = vor.vertices[region]
+            
+    #         # order them counterclockwise
+    #         center = vertices.mean(axis=0)
+    #         angles = np.arctan2(vertices[:,1]-center[1], vertices[:,0]-center[0])
+    #         vertices = vertices[np.argsort(angles)]
+    #     else:# span spanned by m1 and m2
+    #         vertices = np.array([np.zeros_like(self.m1), self.m1, self.m1 + self.m2, self.m2]) - (self.m1 + self.m2)/2
+
+        
+    #     if periodic:
+    #         # Ensure the polygon is closed by repeating the first vertex at the end
+    #         vertices = np.vstack([vertices, vertices[0]])
+            
+    #     return vertices

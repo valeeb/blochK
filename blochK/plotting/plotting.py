@@ -1,4 +1,5 @@
 import numpy as np
+import jax.numpy as jnp
 from numpy import pi,cos,sin,exp
 import matplotlib
 import copy
@@ -6,6 +7,8 @@ import matplotlib.pyplot as plt
 
 from blochK.plotting.utils import path,sample_square
 from blochK.observable import exp_value_O, isDegenerateIn
+from blochK.jax.observable import exp_value_O as jax_exp_value_O
+from blochK.jax.observable import isDegenerateIn as jax_isDegenerateIn
 
 #for coloring lines
 from matplotlib.collections import LineCollection
@@ -50,12 +53,14 @@ def plot_FS(ax,Hamiltonian, Lk=100, coloring_operator='k',show_xlabel=True,show_
         assert isinstance(coloring_operator,str), 'coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian'
     elif isinstance(coloring_operator,np.ndarray):
         assert coloring_operator.shape == (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or coloring_operator.shape == (Hamiltonian.n_orbitals,), 'coloring operator must be an operator (ndarray) with shape matching the Hamiltonian'
+    elif isinstance(coloring_operator,jnp.ndarray):
+        assert coloring_operator.shape == (Hamiltonian.n_orbitals,Hamiltonian.n_orbitals) or coloring_operator.shape == (Hamiltonian.n_orbitals,), 'coloring operator must be an operator (jnp.ndarray) with shape matching the Hamiltonian'
     elif callable(coloring_operator):
         es_test = np.zeros((Hamiltonian.n_orbitals,3)) #dummy es
         psis_test = np.zeros((Hamiltonian.n_orbitals,3,Hamiltonian.n_orbitals))
         assert coloring_operator(es_test,psis_test).shape == es_test.shape, 'coloring operator must be a callable function returning an array of shape = es.shape'
     else:
-        raise ValueError('coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian')
+        raise ValueError('coloring operator must be a color (string) or an operator (ndarray, jnp.ndarray) with shape matching the Hamiltonian')
     
     #setting a nice colormap
     cmap = set_colormap(cmap)
@@ -113,12 +118,15 @@ def plot_FS(ax,Hamiltonian, Lk=100, coloring_operator='k',show_xlabel=True,show_
                         if isinstance(coloring_operator,np.ndarray): #if coloring operator is an operator
                             Os = exp_value_O(coloring_operator,psis_FS)
                             isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy) # * False
+                        elif isinstance(coloring_operator,jnp.ndarray): #if coloring operator is a jnp.ndarray
+                            Os = jax_exp_value_O(coloring_operator,psis_FS)
+                            isDeg = jax_isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy) # * False
                         elif callable(coloring_operator): #if coloring operator is a callable
                             #to implement: make the coloring operator a function of (es,psis) that returns an array of shape es with values in [-1,1] to be colored by the colormap
                             Os = coloring_operator(es_FS,psis_FS)
                             isDeg = isDegenerateIn(es_FS,Os,threshold=threshold_degeneracy) # * False
                         else:
-                            raise ValueError('coloring operator must be a color (string) or an operator (ndarray) with shape matching the Hamiltonian or a callable function')
+                            raise ValueError('coloring operator must be a color (string) or an operator (ndarray, jnp.ndarray) with shape matching the Hamiltonian or a callable function')
                         
                         lc = LineCollection(segments,cmap=cmap,norm=norm, capstyle='projecting')
                         normalized_color = (1-1e-10)*(Os[iband]+1)/2 - 10*isDeg[iband] # shift regular values from interval [0,1] to (0,1) by infinitesimals, make degnerate entries negative
