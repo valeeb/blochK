@@ -433,50 +433,70 @@ class BrillouinZone3D:
             self.points = additional_points 
 
 
-    # def return_boundary(self, periodic=False,true_BZ=True):
-    #     """
-    #     Compute vertices of the 1st Brillouin zone from reciprocal lattice vectors.
-    #     Parameters
-    #     ----------
-    #     periodic : bool, optional
-    #         If True, the polygon is closed by repeating the first vertex at the end. Default is False.
-    #     true_BZ : bool, optional
-    #         If True, compute the Wigner-Seitz cell of the reciprocal lattice. If False, compute the span spanned by b1 and b2. Default is True.
-    #     Returns
-    #     -------
-    #     vertices : ndarray, shape (N, 2)
-    #         Ordered vertices of the Brillouin zone polygon.
-    #     """
+    def return_boundary(self, grid_range=2):
+        """
+        Compute vertices and faces of the 3D Brillouin zone (Wigner-Seitz cell
+        of the reciprocal lattice) from reciprocal lattice vectors m1, m2, m3.
 
-    #     if true_BZ: 
-    #         # generate reciprocal lattice points around origin
-    #         grid_range = range(-2, 3)   # 5x5x5 neighborhood
-    #         points = [m*self.m1 + n*self.m2 + p*self.m3 for m in grid_range for n in grid_range for p in grid_range]
-    #         points = np.array(points)
-            
-    #         # Voronoi diagram
-    #         vor = scipy.spatial.Voronoi(points)
-            
-    #         # index of the origin
-    #         origin_index = np.argmin(np.linalg.norm(points, axis=1))
-            
-    #         # region around the origin
-    #         region_index = vor.point_region[origin_index]
-    #         region = vor.regions[region_index]
-            
-    #         # vertices of BZ polygon
-    #         vertices = vor.vertices[region]
-            
-    #         # order them counterclockwise
-    #         center = vertices.mean(axis=0)
-    #         angles = np.arctan2(vertices[:,1]-center[1], vertices[:,0]-center[0])
-    #         vertices = vertices[np.argsort(angles)]
-    #     else:# span spanned by m1 and m2
-    #         vertices = np.array([np.zeros_like(self.m1), self.m1, self.m1 + self.m2, self.m2]) - (self.m1 + self.m2)/2
+        Parameters
+        ----------
+        grid_range : int, optional
+            Lattice points are generated for indices in range(-grid_range, grid_range+1)
+            along each of the 3 reciprocal directions. Increase this if you get a
+            warning about unbounded ridges (very oblique/skewed lattices need more).
 
-        
-    #     if periodic:
-    #         # Ensure the polygon is closed by repeating the first vertex at the end
-    #         vertices = np.vstack([vertices, vertices[0]])
-            
-    #     return vertices
+        Returns
+        -------
+        vertices : ndarray, shape (N, 3)
+            Vertices of the BZ polyhedron.
+        faces : list of list of int
+            Each entry is a list of vertex indices (into `vertices`), ordered
+            counterclockwise around that face (as seen from outside).
+        """
+        rng = range(-grid_range, grid_range + 1)
+        points = np.array([m*self.m1 + n*self.m2 + p*self.m3
+                            for m in rng for n in rng for p in rng])
+
+        vor = scipy.spatial.Voronoi(points)
+
+        origin_index = np.argmin(np.linalg.norm(points, axis=1))
+
+        # collect ridges (faces) that border the origin's cell
+        raw_faces = []
+        used_global_ids = set()
+        for (p1, p2), ridge_verts in zip(vor.ridge_points, vor.ridge_vertices):
+            if origin_index == p1 or origin_index == p2:
+                if -1 in ridge_verts:
+                    raise RuntimeError(
+                        "Unbounded ridge encountered - increase grid_range."
+                    )
+                raw_faces.append(ridge_verts)
+                used_global_ids.update(ridge_verts)
+
+        # build compact local vertex list
+        global_ids_sorted = sorted(used_global_ids)
+        global_to_local = {g: i for i, g in enumerate(global_ids_sorted)}
+        vertices = vor.vertices[global_ids_sorted]
+
+        # order vertices of each face counterclockwise (planar polygon sort)
+        faces = []
+        for ridge_verts in raw_faces:
+            pts_global = np.array(ridge_verts)
+            pts = vor.vertices[pts_global]
+            center = pts.mean(axis=0)
+
+            normal = np.cross(pts[1] - pts[0], pts[2] - pts[0])
+            normal /= np.linalg.norm(normal)
+
+            u = pts[0] - center
+            u /= np.linalg.norm(u)
+            v = np.cross(normal, u)
+
+            d = pts - center
+            angles = np.arctan2(d @ v, d @ u)
+            order = np.argsort(angles)
+
+            local_ids = [global_to_local[g] for g in pts_global[order]]
+            faces.append(local_ids)
+
+        return vertices, faces

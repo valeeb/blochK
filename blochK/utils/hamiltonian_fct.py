@@ -49,3 +49,52 @@ def operator_expand_dims(list_of_operators,momenta):
     Hk += s0*mu + sx*2*t*(np.cos(kx)+np.cos(ky))
     """
     return [np.expand_dims(op,axis=tuple([-i for i in range(1,len(momenta.shape)+1)])) for op in list_of_operators]
+
+
+def kron_first_axes(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """
+    Compute the Kronecker product of a 2D array with the first two axes
+    of an N-dimensional array.
+
+    The operation is equivalent to applying np.kron(A, B) to the first
+    two dimensions of B while leaving all remaining dimensions unchanged.
+
+    Parameters
+    ----------
+    A : np.ndarray, shape (a1, a2)
+        Two-dimensional input array.
+
+    B : np.ndarray, shape (b1, b2, b3, ..., bn)
+        N-dimensional input array. The Kronecker product is applied only
+        to the first two axes.
+
+    Returns
+    -------
+    C : np.ndarray, shape (a1*b1, a2*b2, b3, ..., bn)
+        Resulting array with the first two axes combined according to the
+        Kronecker product and all remaining axes preserved.
+
+    Examples
+    --------
+    >>> A = np.arange(6).reshape(2, 3)
+    >>> B = np.arange(24).reshape(2, 4, 3)
+    >>> C = kron_first_axes(A, B)
+    >>> C.shape
+    (4, 12, 3)
+
+    Notes
+    -----
+    The implementation uses np.einsum to avoid explicitly constructing
+    large intermediate Kronecker matrices.
+    """
+    if A.ndim != 2:
+        raise ValueError("A must be a 2D array")
+    if B.ndim < 2:
+        raise ValueError("B must have at least 2 dimensions")
+
+    a1, a2 = A.shape
+    b1, b2 = B.shape[:2]
+
+    C = np.einsum("ij,kl...->ikjl...", A, B)
+
+    return C.reshape(a1 * b1, a2 * b2, *B.shape[2:])

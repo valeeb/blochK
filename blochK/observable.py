@@ -29,6 +29,12 @@ def exp_value_O(O,psi):
         res = np.einsum('nxb,bc,nxc->nx',np.conjugate(psi),O,psi)
     elif len(psi.shape) == 4:
         res = np.einsum('nxyb,bc,nxyc->nxy',np.conjugate(psi),O,psi)
+    elif len(psi.shape) == 5:
+        res = np.einsum('nxyzb,bc,nxyzc->nxyz',np.conjugate(psi),O,psi)
+    elif len(psi.shape) == 2:
+        res = np.einsum('nb,bc,nc->n',np.conjugate(psi),O,psi)
+    else:
+        raise ValueError("psi must be 2D, 3D, 4D or 5D array, with last axis being the localH index")
 
     res = np.real_if_close(res)
     assert np.all(np.isreal(res)), "Expectation value of a Hermitian operator must be real. Likely your operator is not Hermitian."

@@ -1,0 +1,14 @@
+name: blochk-env
+channels:
+  - defaults
+dependencies:
+  - python
+  - ipykernel
+  - tqdm
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - scipy
+  - numpy
+  - conda-forge::jax
+prefix: /Users/valentin/opt/anaconda3/envs/blochk-env
