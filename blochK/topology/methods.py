@@ -41,29 +41,69 @@ def berry_curvature(Hamiltonian: Hamiltonian2D, Lk=51,kmesh=None):
     
 
 def berry_curvature_multiband_state(es,psis,energy=0,project_bands=True):
-    """The total non-Abelian Berry curvature below a given energy of a multiband systems. 
+    """Berry flux of the occupied subspace of a multiband system.
+
+    The routine uses determinant link variables to obtain the trace of the
+    non-Abelian Berry curvature.  If the occupation changes across a
+    plaquette (as it does at a Fermi surface), the four fixed-occupation
+    fluxes associated with its corners are averaged.
+
     ----------
     Parameters:
     es: ndarray, shape=(n_bands,Lkx,Lky)
-        energys returned from Hamiltonian2D.diagonalize
+        Energies returned from Hamiltonian2D.diagonalize.
     psis: array-like, shape (n_bands,Lkx,Lky,n_orbital)
-        wavefunction returned from Hamiltonian2D.diagonalize
-    energy: float or ndarray
-        energy below which the effective total Berry curvature is computed
-    project_bands:
-        if True the bands are projected to a the subspace where they occupied. Becomes relevant for system with large number of bands above the maximal energy. 
+        Wavefunctions returned from Hamiltonian2D.diagonalize.
+    energy: float or one-dimensional array-like
+        Energy below which states are occupied.
+    project_bands: bool
+        If True, discard bands which are never occupied for any requested
+        energy. This reduces the overlap-matrix size for models with many
+        high-energy bands.
     ----------
     Returns:
-        flux : array-like, shape (energy,Lkx,Lky) or (Lkx,Lky)
+        flux : ndarray, shape (n_energy,Lkx,Lky) or (Lkx,Lky)
+            Berry flux through each plaquette. A scalar ``energy`` produces
+            the two-dimensional result; an array-like produces an explicit
+            leading energy axis.
+
+    Notes
+    -----
+    The mesh is treated as a periodic, rectangular grid.  The value stored at
+    ``(x, y)`` is the plaquette whose corners are ``(x, y)``, ``(x-1, y)``,
+    ``(x, y-1)``, and ``(x-1, y-1)``.
+
+    The determinant links must be nonzero, and the mesh must be fine enough
+    that every relevant plaquette flux lies inside the principal phase branch.
+    A singular relevant link raises ``ValueError``; phase-branch convergence
+    must be checked by refining the mesh.
+
+    Important:
+    Hamiltonian must be formulated in the periodic gauge, Bloch gauge, embedding gauge, periodic Bloch basis or $\vec{k} \cdot \vec{R}_{\alpha}$-gauge (these are all different names for the same gauge) where the phase includes orbital position
     """
 
-    #Check if input is correct, make energy an array
-    if isinstance(energy,float) or isinstance(energy,int):
-        max_energy = energy
-        energy = np.array([energy])
-    else:
-        assert isinstance(energy,np.ndarray), "Energy must be a float,int or a ndarray"
-        max_energy = energy.max()
+    es = np.asarray(es)
+    psis = np.asarray(psis)
+    if es.ndim != 3:
+        raise ValueError("es must have shape (n_bands, Lkx, Lky)")
+    if psis.ndim != 4 or psis.shape[:3] != es.shape:
+        raise ValueError(
+            "psis must have shape (n_bands, Lkx, Lky, n_orbitals) "
+            "and match es"
+        )
+
+    energy = np.asarray(energy)
+    scalar_energy = energy.ndim == 0
+    if energy.ndim > 1:
+        raise ValueError("energy must be a scalar or a one-dimensional array")
+    energy = np.atleast_1d(energy)
+
+    n_energies = energy.size
+    Lx, Ly = es.shape[1:]
+    if n_energies == 0:
+        return np.empty((0, Lx, Ly), dtype=float)
+
+    max_energy = energy.max()
 
     # project to fewer bands to reduce complexity
     if project_bands:
@@ -71,39 +111,71 @@ def berry_curvature_multiband_state(es,psis,energy=0,project_bands=True):
         psis = psis[occupied_bands] #shape = (n_occ,Lkx,Lky,n_orbital)
         es = es[occupied_bands]
 
-    #M(k,dk)_mn = <u_m(kx,ky)|u_n(kx+dkx,ky)> 
+    # No occupied states means that the determinant line bundle has rank zero
+    # and hence carries zero Berry flux.
+    if es.shape[0] == 0:
+        flux_exy = np.zeros((n_energies, Lx, Ly), dtype=float)
+        return flux_exy[0] if scalar_energy else flux_exy
+
+    # These links are stored at their end point:
+    # Mdx[x,y]_mn = <u_n(x-1,y)|u_m(x,y)> (and analogously for y).
+    # Transposing the conventional overlap matrix does not change its
+    # determinant.
     Mdx_xymn = np.einsum('mxyi,nxyi->xymn',psis,np.roll(np.conjugate(psis),1,axis=1))
     Mdy_xymn = np.einsum('mxyi,nxyi->xymn',psis,np.roll(np.conjugate(psis),1,axis=2))
 
-    #Compute determinant of submatrix
-    #Udx_xyo = ( det(Mdx_xymn m,n<1), det(Mdx_xymn m,n<2), det(Mdx_xymn m,n<3), ...)
-    Udx_xyo = partial_slogdets(Mdx_xymn) 
+    #Compute determinant of submatrix. using that det(A.B.C.D) = det(A)*det(B)*det(C)*det(D)
+    Udx_xyo = partial_slogdets(Mdx_xymn)
     Udy_xyo = partial_slogdets(Mdy_xymn) 
 
-    # Flux through plaqeuttes taking into account o bands
-    # Udx_o(k) * Udy_o(k+dkx) * Udx_o(k+dky)^* * Udy_o(k)^*
+    # Berry flux through each elementary plaquette for every fixed number of
+    # occupied bands.  This phase is already the full one-plaquette flux; the
+    # factor 1/4 enters only when the four corner occupations are averaged.
     exp_of_flux_o = Udx_xyo * np.roll(Udy_xyo,1,axis=0) * np.conjugate(np.roll(Udx_xyo,1,axis=1)) * np.conjugate(Udy_xyo) 
-    flux_xyo = np.angle(exp_of_flux_o)/4
+    flux_xyo = np.angle(exp_of_flux_o)
+    invalid_flux_xyo = (
+        (Udx_xyo == 0)
+        | (np.roll(Udy_xyo, 1, axis=0) == 0)
+        | (np.roll(Udx_xyo, 1, axis=1) == 0)
+        | (Udy_xyo == 0)
+    )
 
     #select the flux with the right band multiplicity
     flux_xyo = np.insert(flux_xyo,0,np.zeros_like(flux_xyo[:,:,0]),axis=-1) # add a zero flux layer for the unoccupied bands
+    invalid_flux_xyo = np.insert(
+        invalid_flux_xyo,
+        0,
+        np.zeros_like(invalid_flux_xyo[:, :, 0]),
+        axis=-1,
+    )
 
-    flux_iexy = []
-    for es_corners in [es, np.roll(es,-1,axis=1), np.roll(es,-1,axis=2), np.roll(np.roll(es,-1,axis=2),-1,axis=1)]:
-        plaqutte_multiplicity_exy = (es_corners[None] < energy[:,None,None,None]).sum(axis=1) #number of occupied bands at each k-point
-        #broadcast to the fluxes in different occupation sectors
-        n_energys, Lx, Ly = plaqutte_multiplicity_exy.shape
-        n_idx, m_idx = np.indices((Lx, Ly))
-        n_idx = np.broadcast_to(n_idx, (n_energys, Lx, Ly))
-        m_idx = np.broadcast_to(m_idx, (n_energys, Lx, Ly))
-        e_idx = np.arange(n_energys)[:, None, None]
-        flux_iexy.append(flux_xyo[n_idx, m_idx, plaqutte_multiplicity_exy])
-    flux_exy = np.mean(flux_iexy,axis=0)
+    corner_energies = (
+        es,
+        np.roll(es, 1, axis=1),
+        np.roll(es, 1, axis=2),
+        np.roll(np.roll(es, 1, axis=1), 1, axis=2),
+    )
+    x_idx, y_idx = np.indices((Lx, Ly))
+    flux_by_corner = []
+    for es_corner in corner_energies:
+        # Number of occupied bands at this corner for every requested energy.
+        multiplicity_exy = (
+            es_corner[None] < energy[:, None, None, None]
+        ).sum(axis=1)
+        selected_invalid = invalid_flux_xyo[
+            x_idx[None], y_idx[None], multiplicity_exy
+        ]
+        if np.any(selected_invalid):
+            raise ValueError(
+                "an occupied-subspace overlap determinant is zero; "
+                "the Berry link is undefined, so refine the k-mesh"
+            )
+        flux_by_corner.append(
+            flux_xyo[x_idx[None], y_idx[None], multiplicity_exy]
+        )
+    flux_exy = np.mean(flux_by_corner, axis=0)
 
-    if flux_exy.shape[0]==1:
-        return flux_exy[0]
-    else:
-        return flux_exy
+    return flux_exy[0] if scalar_energy else flux_exy
 
 
 def chern_number(Hamiltonian: Hamiltonian2D,Lk=51):
@@ -123,13 +195,14 @@ def conductivity_anomalous_Hall(Hamiltonian: Hamiltonian2D,energy=0,Lk=51):
     Lk : int
     -----------
     Returns:
-    sigma_xy : float
-        The anomalous Hall conductivity in units of e^2/hbar
+    sigma_xy : float or ndarray
+        The anomalous Hall conductivity in units of e^2/h.
     """
-    if isinstance(energy,float) or isinstance(energy,int):
-        energy = np.array([energy])
-    else:
-        assert energy.ndim==1, "energy must be a scalar or a 1D array"
+    energy = np.asarray(energy)
+    scalar_energy = energy.ndim == 0
+    if energy.ndim > 1:
+        raise ValueError("energy must be a scalar or a one-dimensional array")
+    energy = np.atleast_1d(energy)
 
     kmesh = Hamiltonian.BZ.sample(Lk)
     es,psis = Hamiltonian.diagonalize(*kmesh)
@@ -137,5 +210,5 @@ def conductivity_anomalous_Hall(Hamiltonian: Hamiltonian2D,energy=0,Lk=51):
     berry_curv = berry_curvature_multiband_state(es,psis,energy=energy) #shape (energy,Lkx,Lky)
 
     sigma_xy = np.sum(berry_curv,axis=(-2,-1))/2/pi 
-    
-    return sigma_xy
+
+    return sigma_xy[0] if scalar_energy else sigma_xy
